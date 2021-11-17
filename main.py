@@ -8,7 +8,7 @@ import copy
 import torchvision
 import os
 from opts import *
-from inference import *
+from Inference import *
 from createDataset import *
 from specials import *
 from entropyloss import *
@@ -115,7 +115,7 @@ def main():
 
     # Config is a variable that holds and saves hyperparameters and inputs
     config = wandb.config
-    infer = inference(args, device, net,
+    infer = Inference(args, device, net,
                       optimizer, trainloader1,
                       testloader, fullTestset.targets[:],
                       classes, reduce,
