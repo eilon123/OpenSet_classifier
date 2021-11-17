@@ -1,6 +1,7 @@
 import argparse
 import wandb
 
+
 def parse():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
     parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -44,10 +45,10 @@ def parse():
     parser.add_argument('--ph1', '-ph1', default=0, action='store_true')
     parser.add_argument('--ph2', '-ph2', default=0, action='store_true')
 
-
-
     args = parser.parse_args()
     return args
+
+
 def configWand(args):
     if args.directTrans:
         opt = 'adam'
