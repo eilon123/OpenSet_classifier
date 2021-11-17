@@ -71,7 +71,8 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, extraClasses=1,extraLayer=1,extraFeat = False,pool = False,d=3):
+    def __init__(self, block, num_blocks, num_classes=10, extraClasses=1, extraLayer=1, extraFeat=False, pool=False,
+                 d=3):
         super(ResNet, self).__init__()
         self.in_planes = 64
         self.extraClasses = extraClasses
@@ -79,28 +80,31 @@ class ResNet(nn.Module):
         self.extraLayer = extraLayer
         self.extraFeat = extraFeat
         self.pool = pool
-        self.conv1 = nn.Conv2d(d, 64, kernel_size=3,
-                               stride=1, padding=1, bias=False)
+
+        # Base Network
+        self.conv1 = nn.Conv2d(d, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
-        if (self.extraClasses == 1 or extraLayer == 1) and extraFeat == False:
-            self.linear = nn.Linear(512 * block.expansion, num_classes)
-            if self.pool:
-                self.scores =  nn.AvgPool1d(2, stride=2)
-        elif self.extraFeat == True:
+
+        # Flavours
+        if self.extraFeat:  # Split before the last layer
             self.class_fc = []
             self.extraFC = nn.Linear(512 * block.expansion, 128 * num_classes)
             self.sumOfAllFears = nn.Linear(num_classes * 640 * block.expansion, 1 * num_classes * extraClasses)
             for i in range(num_classes):
                 self.class_fc.append(nn.Linear(640 * block.expansion, extraClasses).to('cuda'))
-        else:
+
+        elif self.extraClasses == 1 or self.extraLayer == 1:  # Regular Train
+            self.linear = nn.Linear(512 * block.expansion, num_classes)
+
+        else:  # Class Overloading
             self.class_fc = []
             self.extraFC = nn.Linear(512 * block.expansion, self.extraClasses * num_classes)
             for i in range(num_classes):
-                self.class_fc.append(nn.Linear(self.extraClasses * block.expansion,1).to('cuda'))
+                self.class_fc.append(nn.Linear(self.extraClasses * block.expansion, 1).to('cuda'))
             # for i in range(num_classes):
             #     self.nfc[i] = nn.Linear(extraClasses * block.expansion,1)
 
@@ -113,9 +117,9 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        cnnOut = out
-        layer1 = self.layer1(out)
+        x = F.relu(self.bn1(self.conv1(x)))
+
+        layer1 = self.layer1(x)
         layer2 = self.layer2(layer1)
         layer3 = self.layer3(layer2)
         layer4 = self.layer4(layer3)
@@ -125,22 +129,23 @@ class ResNet(nn.Module):
         innerlayers.append(layer3)
         innerlayers.append(layer4)
 
-        out = F.avg_pool2d(layer4, 4)
-        out = out.view(out.size(0), -1)
-        featureLayer = out
+        x = F.avg_pool2d(layer4, 4)
+        x = x.view(x.size(0), -1)
+        featureLayer = x
         pool = 0
         if self.extraClasses == 1:
-            out = self.linear(out)
+            x = self.linear(x)
             if self.pool:
-                pool = self.scores(out)
-        if self.extraFeat == True:
-            featEx = self.extraFC(out)
+                pool = self.scores(x)
+
+        if self.extraFeat:
+            featEx = self.extraFC(x)
 
             out_extention = []
             out_extention1 = []
             for i in range(0, self.num_classes):
-                featPerclass = featEx[:, 128*i :128*(i+1) ]
-                out_extention1.append(self.class_fc[i](torch.cat((featPerclass , out),dim=1)))
+                featPerclass = featEx[:, 128 * i:128 * (i + 1)]
+                out_extention1.append(self.class_fc[i](torch.cat((featPerclass, x), dim=1)))
             #     out_extention.append(torch.cat((featPerclass , out),dim=1))
             # finalFeat = self.sumOfAllFears(out_extention)
             #
@@ -151,23 +156,24 @@ class ResNet(nn.Module):
             out = torch.stack(out_extention1, axis=0).squeeze().T
             out = torch.stack(out_extention1, axis=2).squeeze().T
             out = torch.flatten(out, start_dim=0, end_dim=1).T
-            return out,featEx, featureLayer,innerlayers
-        elif self.extraClasses != 1 and self.extraLayer != 1:
-            out = self.extraFC(out)
-            extraC = out
+            return out, featEx, featureLayer, innerlayers
+
+        if self.extraClasses != 1 and not self.extraLayer:
+            x = self.extraFC(x)
+            extraC = x
             out_extention = []
             for i in range(0, self.num_classes):
-                pre = out[:, i * self.extraClasses:i * self.extraClasses + self.extraClasses]
+                pre = x[:, i * self.extraClasses:i * self.extraClasses + self.extraClasses]
                 out_extention.append(self.class_fc[i](pre))
             out = torch.stack(out_extention, axis=0).squeeze().T
 
-            return out,pool, featureLayer
-        else:
-            return out,pool,featureLayer,innerlayers
+            return out, pool, featureLayer, None
+
+        return x, pool, featureLayer, innerlayers
 
 
-def ResNet18(num_classes, extraClasses=1,extraLayer=1,extraFeat = False,pool=False,d=3):
-    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes, extraClasses,extraLayer,extraFeat=extraFeat,pool=pool,d=d)
+def ResNet18(num_classes, extraClasses=1, extraLayer=1, extraFeat=False, pool=False, d=3):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes, extraClasses, extraLayer, extraFeat=extraFeat, pool=pool, d=d)
 
 
 def ResNet34():
