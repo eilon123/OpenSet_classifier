@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import copy
 import torchvision
-import torchvision.transforms as transforms
 import os
 from opts import *
 from inference import *
@@ -24,33 +23,6 @@ import random
 # https://github.com/kuangliu/pytorch-cifar/blob/master/main.py
 # os.environ["WANDB_MODE"] = "dryrun"
 
-def prepData(use_mnist: bool):
-    if use_mnist:
-        transform_train = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-        ])
-
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-        ])
-
-        return transform_train, transform_test
-
-    transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
-
-    return transform_train, transform_test
 
 
 def main():
