@@ -1,4 +1,9 @@
 import time
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+
 from stats import *
 from utils import progress_bar
 from tsne import *
@@ -9,13 +14,14 @@ criterion = nn.CrossEntropyLoss()
 criterion3 = nn.MSELoss()
 criterion_unsoftmax = nn.NLLLoss()
 m = nn.LogSoftmax(dim=1)
+softmax = nn.Softmax(dim=1)
 ent = 0
 
 
 class Inference:
     def __init__(self, args, device, net, optimizer, trainloader, testloader, targets, classes, reduce=0,
                  trainloader2=0,
-                 ent=0):
+                 ent=0,best_acc=0 ):
         super(Inference, self).__init__()
 
         self.trans = args.trans
@@ -51,7 +57,7 @@ class Inference:
         self.reduce = reduce
         self.mnist = args.mnist
         self.unsave = args.unsave
-
+        self.best_acc = best_acc
     def setTrans(self):
         self.overclass = False
         for idx, l in enumerate(next(self.net.children()).children()):
@@ -65,7 +71,32 @@ class Inference:
                     else:  # Bias
                         torch.nn.init.zeros_(param)
         self.transActive = True
-        self.optimizer.param_groups[0]["lr"] = 1
+        self.optimizer.param_groups[0]["lr"] = 1e-2
+    def setWeights(self,highest,lowest):
+        hist = np.zeros(512)
+
+        self.highest = torch.unique(torch.cat(highest,0))
+        self.lowest = torch.unique(torch.cat(lowest,0))
+        print(len(self.highest))
+        for i in range(len(highest)):
+            for j in range(10):
+                hist[highest[i][j].item()] += 1
+        uniqueFeathigh = torch.cat(highest,0)
+        # for feat,i in enumerate
+        # for idx, l in enumerate(next(self.net.children()).children()):
+        #     for param in l.parameters():
+        #
+        #
+        #         if idx > 5:
+        #             if param.dim() > 1:  # wieghts
+        #                 for i in range(np.shape(param)[0]):
+        #                     for j in range(np.shape(param)[1]):
+        #                         if j in highest[i]:
+        #                             nn.init.constant_(param[i][j], 1)
+        #
+        #                         else:
+        #                             torch.nn.init.zeros_(param[i][j])
+
 
     def setPH2(self):
         for idx, l in enumerate(next(self.net.children()).children()):
@@ -177,13 +208,12 @@ class Inference:
         print("time is ", abs(int(start - end)), " sec")
 
     def test(self, epoch, finalTest):
-        global best_acc
         self.net.eval()
         test_loss = 0
         correct = 0
         total = 0
         featurelist = torch.empty(size=(0, 512)).cuda()
-        gradeHist = -np.ones(shape=(self.tstSize, 10 * (self.overclass - self.union + 1)))
+        gradeHist = -np.ones(shape=(self.tstSize, 10 * (int(self.overclass) - int(self.union * self.overclass>0) + 1)))
         gradeHist = torch.from_numpy(gradeHist)
         gradeHist = gradeHist.cuda()
         histIdx = np.zeros(10)
@@ -200,10 +230,36 @@ class Inference:
             for batch_idx, (inputs, targets) in enumerate(self.testloader):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 outputs, pool, featureLayer, _ = self.net(inputs)
+                featHigh = copy.deepcopy(featureLayer)
+
+                for i in range(512):
+                    if i in self.highest:
+                        continue
+                    else:
+                        for feat in featHigh:
+                            feat[i] = 0
+                outputs1 = self.net.module.quickForward(featHigh)
+                for i in range(512):
+                    if i in self.lowest:
+                        continue
+                    else:
+                        for feat in featureLayer:
+                            feat[i] = 0
+                outputs2 = self.net.module.quickForward(featureLayer)
                 loss = criterion(outputs, targets)
                 test_loss += loss.item()
-                _, predicted = outputs.max(1)
+                # outputs = softmax(outputs)
+                prob, predicted = outputs.max(1)
 
+                # _, predicted1 = outputs1.max(1)
+                # _, predicted2 = outputs2.max(1)
+                #
+                # for i,pred in enumerate(predicted):
+                #     if predicted1[i] == predicted2[i]:
+                #         predicted[i] = predicted1[i]
+                #     else:
+                #         predicted[i] = 9
+                # predicted[prob<0.97] = 9
                 if self.overclass:
                     uniquenessLoss, uniformLoss, newOutputs = self.ent.CalcEntropyLoss(outputs, self.transActive)
                     if not (self.openset):
@@ -216,8 +272,11 @@ class Inference:
 
                     newOutputs = newOutputs.cuda()
                     _, predicted = newOutputs.max(1)
-                    if epoch == self.epochTSNE or finalTest or self.tsne:
-                        gradeHist = calcHist(outputs, predicted, histIdx, gradeHist, self.extraclass)
+                if (epoch == self.epochTSNE or finalTest or self.tsne) and self.overclass:
+                    x=3
+                    gradeHist = calcHist(outputs, predicted, histIdx, gradeHist, self.extraclass)
+                if self.openset:
+                    targets[targets>4] = 9
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
                 test_loss = loss.item()
@@ -238,11 +297,12 @@ class Inference:
                 # Save checkpoint.
                 all_preds = torch.cat((all_preds, predicted), dim=0)
                 all_tar = torch.cat((all_tar, targets), dim=0)
+
         acc = 100. * correct / total
         wandb.log({"conf_mat": wandb.plot.confusion_matrix(probs=None, y_true=all_tar.cpu().numpy(),
                                                            preds=all_preds.cpu().numpy(),
                                                            class_names=self.class_names)})
-        if ((acc > 0 or finalTest) and not (self.directTrans)) and not self.unsave:
+        if ((acc > self.best_acc or finalTest) and not (self.directTrans)) and not self.unsave:
             print('Saving..')
             state = {
                 'net': self.net.state_dict(),
@@ -251,7 +311,7 @@ class Inference:
             }
 
             torch.save(state, self.address)
-            best_acc = acc
+            self.best_acc = acc
             if finalTest:
                 calcStats(featurelist, self.address[0:13 + 4 * self.mnist], self.net)
         if self.tsne or finalTest or epoch == self.epochTSNE:
@@ -260,14 +320,33 @@ class Inference:
             else:
                 features = output
 
+            for j in range(len(np.transpose(features))):
+                fig, axs = plt.subplots(10 + 10*self.overclass, 1)
+                fig.set_size_inches(18.5, 10.5, forward=True)
+                if j == 10:
+                    break
+                # for i in range(len(np.transpose(features))):
+                #
+                #     x = features[all_tar.cpu().numpy()==j].flatten()
+                #     # scoresperClass = features[all_tar.cpu().numpy()==j][i]
+                #     scoresperClass = x[i::10+10*self.overclass]
+                #     axs[i].hist(scoresperClass, bins=200,range=(np.min(features[all_tar.cpu().numpy()==j])-0.5,np.max(features[all_tar.cpu().numpy()==j])+0.5))
+
+
+            # plt.show()
+                s = self.address[0:11]+ 'hist target '+ str(j)
+                # axs.set_title(s)
+                plt.savefig(s)
+
             showHist(gradeHist, self.address[0:13 + 4 * self.mnist], len(outputs[0]), self.union)
 
-            plt.figure()
-            plt.hist(totalPredict, bins=20)
-            plt.savefig(self.address[0:13] + "predict_hist")
+            # plt.figure()
+            # plt.hist(totalPredict, bins=100,range=())
+            # plt.savefig(self.address[0:13] + "predict_hist")
             if self.overclass and not (self.union) and not (self.openset):
                 showtsne(features, totalPredict, self.address[0:13 + 4 * self.mnist], "test", numClasses=20)
-
+            elif self.overclass and self.openset:
+                showtsne(features, totalPredict, self.address[0:13 + 4 * self.mnist], "test")
             else:
                 showtsne(features, self.targets[:], self.address[0:13 + 4 * self.mnist], "test")
 

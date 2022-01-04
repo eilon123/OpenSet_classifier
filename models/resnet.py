@@ -115,7 +115,8 @@ class ResNet(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
-
+    def quickForward(self,feat):
+        return self.linear(feat)
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
 

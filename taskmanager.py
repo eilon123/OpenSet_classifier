@@ -10,16 +10,16 @@ def parse():
 args = parse()
 
 if args.mnist: #mnist
-    os.system('python main.py -t ')
-    os.system('python main.py -t  -union ')
-    os.system('python main.py -t   -union -overclass')
-    os.system('python main.py -t    -overclass')
+    os.system('python main.py -t -mnist')
+    os.system('python main.py -t  -union -mnist ')
+    os.system('python main.py -t   -union -overclass -mnist')
+    os.system('python main.py -t    -overclass -mnist')
 
 
-os.system('python main.py -t -rand')
+os.system('python main.py -t --batch 300')
 
-os.system('python main.py -t  -rand -union -overclass')
+os.system('python main.py -t  -union -overclass --batch 300')
 
-os.system('python main.py -t  -union -rand')
+os.system('python main.py -t  -union --batch 300')
 
-os.system('python main.py -t  -overclass --extraclass 5')
+# os.system('python main.py -t  -overclass --extraclass 5')

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import numpy as np
 
-
+EPS = 1e-10
 class HLoss(nn.Module):
     def __init__(self):
         super(HLoss, self).__init__()
@@ -16,7 +16,8 @@ class HLoss(nn.Module):
             # p = x / sum(x)
             # b = (p * torch.log(p)/torch.log(2))
             if torch.any(x != 0):
-                b = F.softmax(x, dim=0) * F.log_softmax(x, dim=0)
+                p = F.softmax(x, dim=0)
+                b = p * torch.log2(p+EPS)
             else:
                 b = torch.zeros(1).cuda()
             # b = torch.max((x != 0)) * F.softmax(x, dim=0) * F.log_softmax(x, dim=0)
@@ -28,14 +29,12 @@ class HLoss(nn.Module):
             exist[:] = torch.any((x != 0), 1)
 
             exist = exist.cuda()
+            p = F.softmax(x, dim=1)
+            b = p * torch.log2(p+EPS)
+            b_mean = b[exist == 0].mean() if sum(exist == 0) > 0 else 0
+            b[exist == 1, :] = b_mean
 
-            b = F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
-            for i in range(len(b)):
-                if exist[i] == 0:
-                    b[i, 0] = 0
-
-                    # b = exist * F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
-        b = -b.sum()
+        b = -b.mean()
         return b
 
 
@@ -74,13 +73,12 @@ class EntropyLoss():
         k = 0
         for i in range(np.shape(newOutputs)[1]):
             if not transActive:
-                uniformLoss -= self.Kunif * (self.criterion(
+                uniformLoss += self.Kunif * ((.5 - self.criterion(
                     sumProb[i * self.extraclass:
-                            (i + 1) * self.extraclass]))
+                            (i + 1) * self.extraclass])))
 
                 uniquenessLoss += (self.Kuniq / self.batch_size) * self.criterion(
-                    mask[:, i * self.extraclass:
-                            (i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass])
+                    mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass])
 
                 maxEnt -= self.Kunif * (self.criterion(
                     unifarr[i * self.extraclass:
@@ -93,5 +91,5 @@ class EntropyLoss():
             if self.isTrans and not (transActive) and i == 4:
                 break
         # print(uniformLoss.item())
-        print(uniformLoss * 100 / maxEnt)
+        # print(uniformLoss * 100 / maxEnt)
         return uniquenessLoss, uniformLoss, newOutputs

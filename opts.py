@@ -29,7 +29,7 @@ def parse():
     parser.add_argument('--osvm', '-osvm', default=0, action='store_true')
     parser.add_argument('--orth', '-orth', default=0, action='store_true')
     parser.add_argument('--trans', '-trans', default=0, action='store_true')
-    parser.add_argument('--f', '-f', default=True, action='store_true')
+    parser.add_argument('--f', '-f', default=0, action='store_true')
     parser.add_argument('--directTrans', '-directTrans', default=0, action='store_true')
     parser.add_argument('--unsave', '-unsave', default=0, action='store_true')
     parser.add_argument('--pca', '-pca', default=0, action='store_true')

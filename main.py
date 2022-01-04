@@ -92,14 +92,13 @@ def main():
 
     ent = EntropyLoss(args, device)
     if args.overclass:
-        args.lr = 1e-2
-
+        # args.lr = 1e-2
+        x=2
     optimizer = optim.SGD(net.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=5e-4)
     if args.directTrans:
         optimizer = optim.Adam(net.parameters(), lr=args.lr,
                                weight_decay=5e-4)
-        # weight_decay=.9)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
     reduce = 0
@@ -115,31 +114,60 @@ def main():
 
     # Config is a variable that holds and saves hyperparameters and inputs
     config = wandb.config
+    if args.resume == 0:
+        best_acc = 0
+
     infer = Inference(args, device, net,
                       optimizer, trainloader1,
                       testloader, fullTestset.targets[:],
                       classes, reduce,
-                      trainloader2nd, ent)
+                      trainloader2nd, ent,best_acc)
 
     if infer.trans and infer.directTrans:
         infer.setTrans()
 
     # Epoch loop
+
+    w = weight_lst(net)
+    weightValue = torch.sort(w[-2])[0]
+
+    x = torch.sort(w[-2])[1]
+    highest = []
+    lowest = []
+    wlowest = []
+    whighest = []
+    for i in range(int((10 + args.overclass * 10 )/(1+args.openset))):
+        lowest.append(x[i][0:10])
+        highest.append(x[i][-11:-1])
+        wlowest.append(weightValue[i][0:10])
+        whighest.append(weightValue[i][-11:-1])
+    from statistics import mean
+
+    print("highest mean",torch.mean(torch.cat(whighest,0)).item())
+    print("highest var",torch.var(torch.cat(whighest,0)).item())
+
+    print("lowest mean",torch.mean(torch.cat(wlowest,0)).item())
+    print("lowest var", torch.var(torch.cat(wlowest,0)).item())
+    infer.setWeights(highest,lowest)
     for epoch in range(start_epoch, start_epoch + 200):
 
         spc = specials(args, device, net, trainset, testset, classidx_to_keep, trainloader1, testloader,
                        infer.address)
-        spc.flow()
+        # spc.flow()
         if args.train:
             infer.train(epoch, False)
         # reduce.step(np.mean(lossCE))
-        else:
-            if args.train == 0:
-                acc = infer.test(epoch, True)
-                break
-            else:
-                acc = infer.test(epoch, False)
 
+        if args.train == 0:
+            acc = infer.test(epoch, True)
+            break
+        else:
+            if epoch%10 == 0:
+                acc = infer.test(epoch, False)
+        if acc > best_acc:
+            best_acc = acc
+
+        print("================= best acc is",best_acc)
         # Early Stopping
         if not (args.mnist) and acc > 95:
             acc = infer.test(epoch, True)
@@ -152,11 +180,15 @@ def main():
             else:
                 acc = infer.test(epoch, True)
                 break
-
+        if args.overclass and args.openset and acc > 46:
+            acc = infer.test(epoch, True)
+            break
         if args.trans and args.overclass == 0 and acc > 95 and args.resume == 0:
             acc = infer.test(epoch, True)
             break
-        if args.trans and args.overclass == 1 and acc > 93.5 and args.resume == 0:
+        if args.overclass and acc >80:
+            dbg = 3
+        if args.trans and args.overclass == 1 and acc > 91 and args.resume == 0:
             acc = infer.test(epoch, True)
             break
         if args.mnist and epoch == 5:

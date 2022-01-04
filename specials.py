@@ -31,12 +31,11 @@ class specials:
         self.cls = osvm(args, self.device, self.net, self.trainset, self.testloader, self.testset.targets[:], address)
 
     def flow(self):
-        self.deepNN()
-        self.osvm()
-        self.pca_util()
-        self.level()
-        self.orth()
-
+        x=self.deepNN
+        self.osvm
+        self.pca_util
+        self.level
+        self.orth
     def deepNN(self):
         if not (self.NN):
             return
