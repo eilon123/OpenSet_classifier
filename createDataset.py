@@ -85,7 +85,7 @@ def partialDataset(trainset, percentage):
 def createTrainloader(args, trainset, classidx_to_keep=0):
     if args.openset:
         trainloader, _ = createDataset(trainset, classidx_to_keep, True, args.batch)
-    elif args.trans:
+    elif args.trans and not(args.union):
         trainloader2nd = torch.utils.data.DataLoader(
             trainset, batch_size=args.batch, shuffle=False, num_workers=8)
         fulltrainSet = copy.deepcopy(trainset)
@@ -115,10 +115,10 @@ def createTrainloader(args, trainset, classidx_to_keep=0):
 def createTestloader(args, testset, classidx_to_keep=0):
     fullTestset = copy.deepcopy(testset)
     if args.oTest:
-        testloader, _ = createDataset(testset, classidx_to_keep, False, args.batch)
-        fullTestset = testset
+        testloader, set = createDataset(testset, classidx_to_keep, False, args.batch)
+        fullTestset = set
 
-    elif args.trans and not (args.directTrans):
+    elif args.trans and not (args.directTrans) and not(args.union):
         testloader, _ = createDataset(testset, classidx_to_keep, True, args.batch)
 
     else:
@@ -206,6 +206,9 @@ def findAddress(args):
     elif args.overclass and args.featperclass:
         print("Loading feat perclass")
         address += 'featperclass/checkpoint/ckpt.pth'
+    elif args.overclass and args.openset:
+        print("Loading OC openset")
+        address += 'OCopenset/checkpoint/ckpt.pth'
     elif args.openset:
         print("Loading openset")
         address += 'openset/checkpoint/ckpt.pth'
@@ -227,60 +230,64 @@ def createFolders(args):
     else:
         address = ''
     if args.extraLayer:
-        os.makedirs('extraLayer', )
-        os.makedirs('extraLayer/checkpoint')
+        os.makedirs('extraLayer', exist_ok=True )
+        os.makedirs('extraLayer/checkpoint', exist_ok=True)
         address += 'extraLayer/checkpoint/ckpt.pth'
     if args.ph1:
-        os.makedirs('ph1', )
-        os.makedirs('ph1/checkpoint')
+        os.makedirs('ph1', exist_ok=True )
+        os.makedirs('ph1/checkpoint', exist_ok=True)
         address += 'ph1/checkpoint/ckpt.pth'
 
     elif args.ph2:
-        os.makedirs('ph2', )
-        os.makedirs('ph2/checkpoint')
+        os.makedirs('ph2', exist_ok=True )
+        os.makedirs('ph2/checkpoint', exist_ok=True)
         address += 'ph2/checkpoint/ckpt.pth'
     elif args.extraclass > 2:
-        os.makedirs('5overclass', )
-        os.makedirs('5overclass/checkpoint')
+        os.makedirs('5overclass', exist_ok=True )
+        os.makedirs('5overclass/checkpoint', exist_ok=True)
         address += '5overclass/checkpoint/ckpt.pth'
     elif args.trans and args.overclass and args.featperclass:
-        os.makedirs('featpertrans')
-        os.makedirs('featpertrans/checkpoint')
+        os.makedirs('featpertrans', exist_ok=True)
+        os.makedirs('featpertrans/checkpoint', exist_ok=True)
         address += 'featpertrans/checkpoint/ckpt.pth'
     elif args.trans and args.overclass:
-        os.makedirs('transover')
-        os.makedirs('transover/checkpoint')
+        os.makedirs('transover', exist_ok=True)
+        os.makedirs('transover/checkpoint', exist_ok=True)
         address += 'transover/checkpoint/ckpt.pth'
     elif args.trans:
         os.makedirs('transfer', exist_ok=True)
-        os.makedirs('transfer/checkpoint')
+        os.makedirs('transfer/checkpoint', exist_ok=True)
         address += 'transfer/checkpoint/ckpt.pth'
     elif args.imbalance:
-        os.makedirs('imbalance')
-        os.makedirs('imbalance/checkpoint')
+        os.makedirs('imbalance', exist_ok=True)
+        os.makedirs('imbalance/checkpoint', exist_ok=True)
         address += 'imbalance/checkpoint/ckpt.pth'
     elif args.union and args.overclass:
-        os.makedirs('unionOC')
-        os.makedirs('unionOC/checkpoint')
+        os.makedirs('unionOC', exist_ok=True)
+        os.makedirs('unionOC/checkpoint', exist_ok=True)
         address += 'unionOC/checkpoint/ckpt.pth'
     elif args.union and not args.overclass:
-        os.makedirs('union')
-        os.makedirs('union/checkpoint')
+        os.makedirs('union', exist_ok=True)
+        os.makedirs('union/checkpoint', exist_ok=True)
         address += 'union/checkpoint/ckpt.pth'
     elif args.overclass and args.featperclass:
-        os.makedirs('featperclass')
-        os.makedirs('featperclass/checkpoint')
+        os.makedirs('featperclass', exist_ok=True)
+        os.makedirs('featperclass/checkpoint', exist_ok=True)
         address += 'featperclass/checkpoint/ckpt.pth'
+    elif args.overclass and args.openset:
+        os.makedirs('OCopenset', exist_ok=True)
+        os.makedirs('OCopenset/checkpoint', exist_ok=True)
+        address += 'OCopenset/checkpoint/ckpt.pth'
     elif args.openset:
-        os.makedirs('openset')
-        os.makedirs('openset/checkpoint')
+        os.makedirs('openset', exist_ok=True)
+        os.makedirs('openset/checkpoint', exist_ok=True)
         address += 'openset/checkpoint/ckpt.pth'
     elif args.overclass:
-        os.makedirs('overclass')
-        os.makedirs('overclass/checkpoint')
+        os.makedirs('overclass', exist_ok=True)
+        os.makedirs('overclass/checkpoint', exist_ok=True)
         address += 'overclass/checkpoint/ckpt.pth'
     else:
-        os.makedirs('checkpoint')
+        os.makedirs('checkpoint', exist_ok=True)
         address += 'checkpoint/ckpt.pth'
     return address
 
