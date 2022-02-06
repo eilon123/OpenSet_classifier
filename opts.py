@@ -45,6 +45,8 @@ def parse():
     parser.add_argument('--ph1', '-ph1', default=0, action='store_true')
     parser.add_argument('--ph2', '-ph2', default=0, action='store_true')
 
+    parser.add_argument('--ae', '-ae', default=0, action='store_true')
+
     args = parser.parse_args()
     return args
 

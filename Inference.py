@@ -9,10 +9,13 @@ from utils import progress_bar
 from tsne import *
 from createDataset import *
 import wandb
+from sklearn.metrics import roc_curve,roc_auc_score
 
 criterion = nn.CrossEntropyLoss()
 criterion3 = nn.MSELoss()
 criterion_unsoftmax = nn.NLLLoss()
+criterion1 = nn.L1Loss()
+criterion1Tst = nn.L1Loss(reduction='none')
 m = nn.LogSoftmax(dim=1)
 softmax = nn.Softmax(dim=1)
 ent = 0
@@ -97,7 +100,8 @@ class Inference:
         #                         else:
         #                             torch.nn.init.zeros_(param[i][j])
 
-
+    def setclasses(self,selected):
+        self.selectedClasses = selected
     def setPH2(self):
         for idx, l in enumerate(next(self.net.children()).children()):
             for param in l.parameters():
@@ -188,7 +192,8 @@ class Inference:
                          % (train_loss / (batch_idx + 1), 100. * correct / total, correct, total))
             all_preds = torch.cat((all_preds, predicted), dim=0)
             all_tar = torch.cat((all_tar, targets), dim=0)
-
+        print(train_lossUniq)
+        print("sdfsdf", train_lossUnif)
         if self.tsne or finalTest or epoch == self.epochTSNE:
             if self.overclass and not (self.union):
                 showtsne(output, totalPredict, self.address[0:13 + 4 * self.mnist], "train", numClasses=20)
@@ -225,27 +230,29 @@ class Inference:
         predictedext = 0
         all_preds = torch.Tensor([]).cuda()
         all_tar = torch.Tensor([]).cuda()
+        pin = []
 
+        pout = []
         with torch.no_grad():
             for batch_idx, (inputs, targets) in enumerate(self.testloader):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 outputs, pool, featureLayer, _ = self.net(inputs)
                 featHigh = copy.deepcopy(featureLayer)
 
-                for i in range(512):
-                    if i in self.highest:
-                        continue
-                    else:
-                        for feat in featHigh:
-                            feat[i] = 0
-                outputs1 = self.net.module.quickForward(featHigh)
-                for i in range(512):
-                    if i in self.lowest:
-                        continue
-                    else:
-                        for feat in featureLayer:
-                            feat[i] = 0
-                outputs2 = self.net.module.quickForward(featureLayer)
+                # for i in range(512):
+                #     if i in self.highest:
+                #         continue
+                #     else:
+                #         for feat in featHigh:
+                #             feat[i] = 0
+                # outputs1 = self.net.module.quickForward(featHigh)
+                # for i in range(512):
+                #     if i in self.lowest:
+                #         continue
+                #     else:
+                #         for feat in featureLayer:
+                #             feat[i] = 0
+                # outputs2 = self.net.module.quickForward(featureLayer)
                 loss = criterion(outputs, targets)
                 test_loss += loss.item()
                 # outputs = softmax(outputs)
@@ -277,6 +284,11 @@ class Inference:
                     gradeHist = calcHist(outputs, predicted, histIdx, gradeHist, self.extraclass)
                 if self.openset:
                     targets[targets>4] = 9
+                    if targets == 9:
+                        pout.append(self.recalibrate_scores(outputs))
+                    else:
+
+                        pin.append(self.recalibrate_scores(outputs))
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
                 test_loss = loss.item()
@@ -297,7 +309,9 @@ class Inference:
                 # Save checkpoint.
                 all_preds = torch.cat((all_preds, predicted), dim=0)
                 all_tar = torch.cat((all_tar, targets), dim=0)
-
+        if self.openset:
+            res = self.calc_auroc(pin,pout)
+            print("fucking res is",res)
         acc = 100. * correct / total
         wandb.log({"conf_mat": wandb.plot.confusion_matrix(probs=None, y_true=all_tar.cpu().numpy(),
                                                            preds=all_preds.cpu().numpy(),
@@ -356,3 +370,156 @@ class Inference:
             wandb.log({"unif loss (test)": (test_lossUnif / (batch_idx + 1))})
             # wandb.log({"CE loss (test)": (test_lossCE / (batch_idx + 1))})
         return acc
+
+    def calc_auroc(self,id_test_results, ood_test_results):
+        # calculate the AUROC
+        scores = np.concatenate((id_test_results, ood_test_results))
+
+        trues = np.array(([1] * len(id_test_results)) + ([0] * len(ood_test_results)))
+        result = roc_auc_score(trues, scores)
+        false_positive_rate1, true_positive_rate1, threshold1 = roc_curve(trues, scores)
+        plt.title('Receiver Operating Characteristic - DecisionTree')
+        plt.plot(false_positive_rate1, true_positive_rate1)
+        plt.plot([0, 1], ls="--")
+        plt.plot([0, 0], [1, 0], c=".7"), plt.plot([1, 1], c=".7")
+        plt.ylabel('True Positive Rate')
+        plt.xlabel('False Positive Rate')
+        plt.show()
+        return result
+    def recalibrate_scores(self, img_features,
+                               alpharank=5):
+
+        NCLASSES = 10
+        # img_features = img_features.cpu().numpy()
+        # ranked_list = img_features[0:10].argsort()[::-1]
+        ranked_list = torch.sort(img_features,descending=True)[1]
+        alpha_weights = [((alpharank + 1) - i) / float(alpharank) for i in range(1, alpharank + 1)]
+        img_features = img_features.cpu().numpy()
+        ranked_list = ranked_list.cpu().numpy()
+        ranked_alpha = np.zeros(NCLASSES)
+        for i in range(len(alpha_weights)):
+            ranked_alpha[ranked_list[0][i]] = alpha_weights[i]
+
+        openmax_layer = []
+        openmax_unknown = []
+
+
+
+        for cls_indx in range(NCLASSES):
+
+            if cls_indx == 5:
+                # and args.overclass==0:
+                break
+
+
+            modified_unit = img_features[0][cls_indx] * (1 - ranked_alpha[cls_indx])
+            openmax_layer += [modified_unit]
+            openmax_unknown += [img_features[0][cls_indx] - modified_unit]
+
+        openmax_fc8 = np.asarray(openmax_layer)
+        openmax_score_u = np.asarray(openmax_unknown)
+
+        openmax_probab = self.computeOpenMaxProbability(openmax_fc8, openmax_score_u)
+
+        return openmax_probab
+
+    def computeOpenMaxProbability(self,openmax_fc8, openmax_score_u):
+        # n_classes = openmax_fc8.size()[1]
+        n_classes = np.shape(openmax_fc8)[0]
+        scores = []
+        import scipy as sp
+        for category in range(n_classes):
+            scores += [sp.exp(openmax_fc8[category])]
+
+        total_denominator = sp.sum(sp.exp(openmax_fc8)) + sp.exp(sp.sum(openmax_score_u))
+        prob_scores = scores / total_denominator
+        prob_unknowns = sp.exp(sp.sum(openmax_score_u)) / total_denominator
+
+        # modified_scores = [prob_unknowns] + prob_scores.tolist()
+        # assert len(modified_scores) == (NCLASSES+1)
+        # return modified_scores
+
+        return prob_unknowns
+    def AEtrain(self,epoch):
+        train_loss = 0
+        total = 0
+        for batch_idx, (inputs, targets) in enumerate(self.trainloader):
+            loss = 0
+            loss1=0
+            loss2=0
+            self.optimizer.zero_grad()
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            auto,diffout= self.net(inputs)
+            loss1 = criterion1(inputs, auto)
+            if epoch == 0 and batch_idx == 0:
+                self.ref = list()
+                for i in range(len(self.selectedClasses)):
+                    self.ref.append(inputs[targets==i][0])
+            for i in range(len(self.selectedClasses)):
+                inputs[targets == i] = self.ref[i]
+            tar = list()
+            for i in range(len(targets)):
+                tar.append(self.ref[targets[i]])
+            loss2 = criterion1(self.ref[targets],diffout)
+            loss = loss1 + loss2
+            loss.backward()
+            self.optimizer.step()
+
+            train_loss += loss.item()
+            total += targets.size(0)
+
+            progress_bar(batch_idx, len(self.trainloader), 'Loss: %.3f | total is %d) '
+                         % (train_loss / (batch_idx + 1),  total))
+
+    def AEtest(self,epoch,finalTest):
+
+        test_loss = 0
+        total = 0
+        print("test")
+        hist = np.zeros(shape=(10,1000))
+        histIdx = np.zeros(10)
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(self.testloader):
+                loss = 0
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+                auto,diffout= self.net(inputs)
+
+                if finalTest:
+                    loss = criterion1Tst(inputs,auto)
+                    for i in range(len(self.selectedClasses)):
+                        inputs = self.ref[0]
+                    loss += criterion1Tst(inputs, diffout)
+                    for i in range(len(targets)):
+                        tar = targets[i].item()
+                        idx = int(histIdx[tar])
+                        hist[tar,idx] = torch.mean(loss[i].flatten()).item()
+                        histIdx[tar] += 1
+                loss += criterion1(inputs, auto)
+                for i in range(len(self.selectedClasses)):
+                    inputs = self.ref[0]
+                loss += criterion1(inputs, diffout)
+
+                test_loss += loss.item()
+                total += targets.size(0)
+
+                progress_bar(batch_idx, len(self.testloader), 'Loss: %.3f | total is %d) '
+                             % (test_loss / (batch_idx + 1),  total))
+        if test_loss < self.best_acc and not self.unsave:
+            self.best_acc = test_loss
+            print('Saving..')
+            state = {
+                'net': self.net.state_dict(),
+                'acc': loss,
+                'epoch': epoch,
+            }
+
+            torch.save(state, self.address)
+        if finalTest:
+            fig, axs = plt.subplots(10 + 10 * self.overclass, 1)
+            fig.set_size_inches(18.5, 10.5, forward=True)
+            for i in range(10):
+
+                axs[i].hist(hist[i,:], bins=200,range=(0,2))
+            plt.show()
+        return test_loss

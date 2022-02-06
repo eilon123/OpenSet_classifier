@@ -35,6 +35,8 @@ class HLoss(nn.Module):
             b[exist == 1, :] = b_mean
 
         b = -b.mean()
+        # b = -b.sum()
+
         return b
 
 
@@ -62,7 +64,7 @@ class EntropyLoss():
 
             mask = mask.to(self.device)
             sumProb = (1 / self.batch_size) * torch.sum(mask * outputs, dim=0)
-
+            sumProb =  torch.sum(mask * outputs, dim=0)
         scores = F.softmax(outputs, dim=1)
 
         uniformLoss = 0
@@ -71,18 +73,19 @@ class EntropyLoss():
         unifarr = torch.ones(int(np.shape(outputs)[1]))
         unifarr = unifarr.to(self.device)
         k = 0
+        maxEnt -=  (self.criterion(
+            unifarr[0 * self.extraclass:
+                    (0 + 1) * self.extraclass]))
         for i in range(np.shape(newOutputs)[1]):
             if not transActive:
-                uniformLoss += self.Kunif * ((.5 - self.criterion(
+                uniformLoss += self.Kunif * ((maxEnt - self.criterion(
                     sumProb[i * self.extraclass:
                             (i + 1) * self.extraclass])))
 
                 uniquenessLoss += (self.Kuniq / self.batch_size) * self.criterion(
                     mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass])
 
-                maxEnt -= self.Kunif * (self.criterion(
-                    unifarr[i * self.extraclass:
-                            (i + 1) * self.extraclass]))
+
 
             newOutputs[:, i] = torch.sum(
                 scores[:, i * self.extraclass:
@@ -92,4 +95,5 @@ class EntropyLoss():
                 break
         # print(uniformLoss.item())
         # print(uniformLoss * 100 / maxEnt)
+        print(sumProb)
         return uniquenessLoss, uniformLoss, newOutputs

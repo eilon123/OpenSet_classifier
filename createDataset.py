@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import copy
 from models import *
+from models.AE import BasicAE
 import os
 import torch
 from sklearn.model_selection import train_test_split
@@ -83,7 +84,7 @@ def partialDataset(trainset, percentage):
 
 
 def createTrainloader(args, trainset, classidx_to_keep=0):
-    if args.openset:
+    if args.openset or args.ae:
         trainloader, _ = createDataset(trainset, classidx_to_keep, True, args.batch)
     elif args.trans and not(args.union):
         trainloader2nd = torch.utils.data.DataLoader(
@@ -145,6 +146,8 @@ def chooseNet(args, device, extraClasses=2):
         print("extraLayer")
         net = ResNet18(num_classes=5, extraLayer=2, extraClasses=1 + (
                 extraClasses - 1) * args.overclass, d=d)  # extraClasses=1 + (extraClasses - 1) * args.overclass)
+    elif args.ae:
+        net = BasicAE()
     elif args.union and args.overclass:
         net = ResNet18(num_classes=10, d=d)  # extraClasses=1 + (extraClasses - 1) * args.overclass)
     elif args.union:
@@ -154,6 +157,7 @@ def chooseNet(args, device, extraClasses=2):
     elif args.overclass and args.featperclass and not args.trans:
         net = ResNet18(num_classes=10, extraClasses=1 + (extraClasses - 1) * args.overclass, extraFeat=True,
                        pool=args.pool, d=d)
+
     else:
         net = ResNet18(
             num_classes=10 + 10 * (args.extraclass - 1) * args.overclass * (args.trans == 0) * (args.openset == 0),
@@ -172,6 +176,11 @@ def findAddress(args):
         print("Loading extraLayer")
         assert os.path.isdir('extraLayer/checkpoint'), 'Error: no checkpoint directory found!'
         address += 'extraLayer/checkpoint/ckpt.pth'
+    elif args.ae:
+        print("Loading autoencoder")
+        assert os.path.isdir('autoencoder'), 'Error: no checkpoint directory found!'
+        address += 'autoencoder/ckpt.pth'
+
     elif args.ph2 or args.ph1:
         print("loading ph1 for ph2")
         address += 'ph1/checkpoint/ckpt.pth'
@@ -233,7 +242,10 @@ def createFolders(args):
         os.makedirs('extraLayer', exist_ok=True )
         os.makedirs('extraLayer/checkpoint', exist_ok=True)
         address += 'extraLayer/checkpoint/ckpt.pth'
-    if args.ph1:
+    if args.ae:
+        os.makedirs('autoencoder', exist_ok=True)
+        address += 'autoencoder/ckpt.pth'
+    elif args.ph1:
         os.makedirs('ph1', exist_ok=True )
         os.makedirs('ph1/checkpoint', exist_ok=True)
         address += 'ph1/checkpoint/ckpt.pth'

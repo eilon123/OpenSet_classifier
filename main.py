@@ -76,6 +76,9 @@ def main():
 
     classessel = random.sample(range(10), 5)
     selectedClasses = [0, 1, 2, 3, 4]
+    if args.ae:
+        selectedClasses = [0,1]
+
     # selectedClasses = classessel
 
     print("Selected class are %d", selectedClasses)
@@ -116,6 +119,8 @@ def main():
     config = wandb.config
     if args.resume == 0:
         best_acc = 0
+        if args.ae:
+            best_acc = np.inf
 
     infer = Inference(args, device, net,
                       optimizer, trainloader1,
@@ -125,47 +130,65 @@ def main():
 
     if infer.trans and infer.directTrans:
         infer.setTrans()
-
+    infer.setclasses(selectedClasses)
     # Epoch loop
+    if args.ae ==0:
+        w = weight_lst(net)
+        weightValue = torch.sort(w[-2])[0]
 
-    w = weight_lst(net)
-    weightValue = torch.sort(w[-2])[0]
+        x = torch.sort(w[-2])[1]
+        highest = []
+        lowest = []
+        wlowest = []
+        whighest = []
+        for i in range(int((10 + args.overclass * 10 )/(1+args.openset))):
+            lowest.append(x[i][0:10])
+            highest.append(x[i][-11:-1])
+            wlowest.append(weightValue[i][0:10])
+            whighest.append(weightValue[i][-11:-1])
+        from statistics import mean
 
-    x = torch.sort(w[-2])[1]
-    highest = []
-    lowest = []
-    wlowest = []
-    whighest = []
-    for i in range(int((10 + args.overclass * 10 )/(1+args.openset))):
-        lowest.append(x[i][0:10])
-        highest.append(x[i][-11:-1])
-        wlowest.append(weightValue[i][0:10])
-        whighest.append(weightValue[i][-11:-1])
-    from statistics import mean
+        print("highest mean",torch.mean(torch.cat(whighest,0)).item())
+        print("highest var",torch.var(torch.cat(whighest,0)).item())
 
-    print("highest mean",torch.mean(torch.cat(whighest,0)).item())
-    print("highest var",torch.var(torch.cat(whighest,0)).item())
-
-    print("lowest mean",torch.mean(torch.cat(wlowest,0)).item())
-    print("lowest var", torch.var(torch.cat(wlowest,0)).item())
-    infer.setWeights(highest,lowest)
+        print("lowest mean",torch.mean(torch.cat(wlowest,0)).item())
+        print("lowest var", torch.var(torch.cat(wlowest,0)).item())
+        infer.setWeights(highest,lowest)
     for epoch in range(start_epoch, start_epoch + 200):
 
         spc = specials(args, device, net, trainset, testset, classidx_to_keep, trainloader1, testloader,
                        infer.address)
         # spc.flow()
         if args.train:
-            infer.train(epoch, False)
+            if args.ae:
+                infer.AEtrain(epoch)
+            else:
+                infer.train(epoch, False)
         # reduce.step(np.mean(lossCE))
 
         if args.train == 0:
-            acc = infer.test(epoch, True)
+            if args.ae:
+                acc = infer.AEtest(epoch, True)
+            else:
+                acc = infer.test(epoch, True)
             break
         else:
-            if epoch%10 == 0:
-                acc = infer.test(epoch, False)
-        if acc > best_acc:
-            best_acc = acc
+            print("epoch num ",epoch)
+            if epoch%4 == 0:
+                if args.ae:
+                    acc = infer.AEtest(epoch,False)
+                else:
+
+                    acc = infer.test(epoch, False)
+            if epoch == 50 and args.ae:
+                acc = infer.AEtest(epoch, True)
+
+        if args.ae:
+            if acc < best_acc:
+                best_acc = acc
+        else:
+            if acc > best_acc:
+                best_acc = acc
 
         print("================= best acc is",best_acc)
         # Early Stopping
