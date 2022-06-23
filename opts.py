@@ -11,7 +11,13 @@ def parse():
     parser.add_argument('--oTest', '-oTest', default=0, action='store_true')
 
     parser.add_argument('--tsne', '-tsne', default=0, action='store_true')
+    parser.add_argument('--cluster', '-cluster', default=0, action='store_true')
+    parser.add_argument('--arcface', '-arcface', default=0, action='store_true')
+    parser.add_argument('--deepclassifier', '-deepclassifier', default=0, action='store_true')
+    parser.add_argument('--kl', '-kl', default=0, action='store_true')
+    parser.add_argument('--falselabels', '-falselabels', default=0, action='store_true')
     parser.add_argument('--epochTSNE', default=198, type=int, help='Classes used in testing')
+    parser.add_argument('--stop', default=1, type=int, help='Classes used in testing')
 
     parser.add_argument('--NN', '-NN', default=0, action='store_true')
     parser.add_argument('--overclass', '-overclass', default=0, action='store_true')
@@ -30,20 +36,24 @@ def parse():
     parser.add_argument('--orth', '-orth', default=0, action='store_true')
     parser.add_argument('--trans', '-trans', default=0, action='store_true')
     parser.add_argument('--f', '-f', default=0, action='store_true')
-    parser.add_argument('--directTrans', '-directTrans', default=0, action='store_true')
     parser.add_argument('--unsave', '-unsave', default=0, action='store_true')
     parser.add_argument('--pca', '-pca', default=0, action='store_true')
     parser.add_argument('--pool', '-pool', default=0, action='store_true')
     parser.add_argument('--numOftrain', default=20, type=int, help='Classes used in testing')
     parser.add_argument('--Kunif', default=2, type=float, help='Classes used in testing')
     parser.add_argument('--Kuniq', default=0.1, type=float, help='Classes used in testing')
-
+    parser.add_argument('--lamda', default=5e-4, type=float, help='Classes used in testing')
     parser.add_argument('--batch', default=500, type=int, help='Classes used in testing')
-
+    parser.add_argument('--load_path', default="", type=str,
+                        help="Path to save the ensemble weights")
+    parser.add_argument('--save_path', default="", type=str,
+                        help="Path to save the ensemble weights")
     parser.add_argument('--rand', '-rand', default=0, action='store_true')
     parser.add_argument('--mnist', '-mnist', default=0, action='store_true')
     parser.add_argument('--ph1', '-ph1', default=0, action='store_true')
     parser.add_argument('--ph2', '-ph2', default=0, action='store_true')
+    parser.add_argument('--constLayer', '-constLayer', default=0, action='store_true')
+    parser.add_argument('--time', '-time', default=0, action='store_true')
 
     parser.add_argument('--ae', '-ae', default=0, action='store_true')
 
@@ -52,7 +62,7 @@ def parse():
 
 
 def configWand(args):
-    if args.directTrans:
+    if args.trans:
         opt = 'adam'
     else:
         opt = 'SGD'

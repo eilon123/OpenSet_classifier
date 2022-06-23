@@ -22,7 +22,7 @@ class HLoss(nn.Module):
                 b = torch.zeros(1).cuda()
             # b = torch.max((x != 0)) * F.softmax(x, dim=0) * F.log_softmax(x, dim=0)
         else:
-            exist = torch.zeros(len(x))
+            exist = torch.zeros(len(x),dtype=bool)
 
             # for i in range(extraClasses):
 
@@ -30,12 +30,16 @@ class HLoss(nn.Module):
 
             exist = exist.cuda()
             p = F.softmax(x, dim=1)
-            b = p * torch.log2(p+EPS)
-            b_mean = b[exist == 0].mean() if sum(exist == 0) > 0 else 0
+            b = p * torch.log2(p)
+            if exist.any():
+                b_mean = b[exist == 1].mean()
+            else:
+                b_mean = 0
+
             b[exist == 1, :] = b_mean
 
-        b = -b.mean()
-        # b = -b.sum()
+        # b = -b.mean()
+        b = -b.sum()
 
         return b
 
@@ -64,7 +68,7 @@ class EntropyLoss():
 
             mask = mask.to(self.device)
             sumProb = (1 / self.batch_size) * torch.sum(mask * outputs, dim=0)
-            sumProb =  torch.sum(mask * outputs, dim=0)
+            # sumProb =  torch.sum(mask * outputs, dim=0)
         scores = F.softmax(outputs, dim=1)
 
         uniformLoss = 0
@@ -73,18 +77,17 @@ class EntropyLoss():
         unifarr = torch.ones(int(np.shape(outputs)[1]))
         unifarr = unifarr.to(self.device)
         k = 0
-        maxEnt -=  (self.criterion(
+        maxEnt  =  (self.criterion(
             unifarr[0 * self.extraclass:
                     (0 + 1) * self.extraclass]))
         for i in range(np.shape(newOutputs)[1]):
             if not transActive:
-                uniformLoss += self.Kunif * ((maxEnt - self.criterion(
-                    sumProb[i * self.extraclass:
-                            (i + 1) * self.extraclass])))
+                # uniformLoss += self.Kunif * (maxEnt - self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass]))/100
+                uniformLoss += self.Kunif * (0 - self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass]))
 
                 uniquenessLoss += (self.Kuniq / self.batch_size) * self.criterion(
-                    mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass])
-
+                    # mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass])/10000
+                    mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, i * self.extraclass:(i + 1) * self.extraclass])/10
 
 
             newOutputs[:, i] = torch.sum(
@@ -95,5 +98,5 @@ class EntropyLoss():
                 break
         # print(uniformLoss.item())
         # print(uniformLoss * 100 / maxEnt)
-        print(sumProb)
+        # print(sumProb)
         return uniquenessLoss, uniformLoss, newOutputs

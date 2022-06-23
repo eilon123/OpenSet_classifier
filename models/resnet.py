@@ -69,17 +69,36 @@ class Bottleneck(nn.Module):
         out = F.relu(out)
         return out
 
+class Quicknet(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10):
+        super(Quicknet, self).__init__()
+        self.in_planes = 64
+
+        self.num_classes = num_classes
+        self.deeplayer0 = nn.Linear(64* 32* 32, num_classes).to('cuda')
+        self.deeplayer1 = nn.Linear(128 * 16 * 16 * block.expansion, num_classes).to('cuda')
+        self.deeplayer2 = nn.Linear(256 * 8 * 8 * block.expansion, num_classes).to('cuda')
+        self.deeplayer3 = nn.Linear(512 * 4 * 4 * block.expansion, num_classes).to('cuda')
+
+    def forward(self,deeplayers):
+        outputslist = list()
+        outputslist.append(self.deeplayer0(deeplayers[0].flatten(start_dim=1)))
+        outputslist.append(self.deeplayer1(deeplayers[1].flatten(start_dim=1)))
+        outputslist.append(self.deeplayer2(deeplayers[2].flatten(start_dim=1)))
+        outputslist.append(self.deeplayer3(deeplayers[3].flatten(start_dim=1)))
+
+
+        return outputslist
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, extraClasses=1, extraLayer=1, extraFeat=False, pool=False,
-                 d=3):
+    def __init__(self, block, num_blocks, num_classes=10, extraClasses=1, extraLayer=1, extraFeat=False,d=3,kl=False):
         super(ResNet, self).__init__()
         self.in_planes = 64
         self.extraClasses = extraClasses
         self.num_classes = num_classes
         self.extraLayer = extraLayer
         self.extraFeat = extraFeat
-        self.pool = pool
+        self.kl = kl
 
         # Base Network
         self.conv1 = nn.Conv2d(d, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -88,6 +107,11 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        if self.kl:
+            self.deeplayer0 = nn.Linear(64 * 32 * 32, num_classes).to('cuda')
+            self.deeplayer1 = nn.Linear(128 * 16 * 16 * block.expansion, num_classes).to('cuda')
+            self.deeplayer2 = nn.Linear(256 * 8 * 8 * block.expansion, num_classes).to('cuda')
+            self.deeplayer3 = nn.Linear(512 * 4 * 4 * block.expansion, num_classes).to('cuda')
 
         # Flavours
         if self.extraFeat:  # Split before the last layer
@@ -117,6 +141,7 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
     def quickForward(self,feat):
         return self.linear(feat)
+
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
 
@@ -125,19 +150,20 @@ class ResNet(nn.Module):
         layer3 = self.layer3(layer2)
         layer4 = self.layer4(layer3)
         innerlayers = list()
-        innerlayers.append(layer1)
-        innerlayers.append(layer2)
-        innerlayers.append(layer3)
-        innerlayers.append(layer4)
+
 
         x = F.avg_pool2d(layer4, 4)
         x = x.view(x.size(0), -1)
         featureLayer = x
-        pool = 0
+        innerlayers.append(featureLayer)
+        innerlayers.append(layer4)
+        innerlayers.append(layer3)
+        innerlayers.append(layer2)
+        innerlayers.append(layer1)
+
         if self.extraClasses == 1:
             x = self.linear(x)
-            if self.pool:
-                pool = self.scores(x)
+
 
         if self.extraFeat:
             featEx = self.extraFC(x)
@@ -168,17 +194,26 @@ class ResNet(nn.Module):
                 out_extention.append(self.class_fc[i](pre))
             out = torch.stack(out_extention, axis=0).squeeze().T
 
-            return out, pool, featureLayer, None
-
-        return x, pool, featureLayer, innerlayers
 
 
-def ResNet18(num_classes, extraClasses=1, extraLayer=1, extraFeat=False, pool=False, d=3):
-    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes, extraClasses, extraLayer, extraFeat=extraFeat, pool=pool, d=d)
+            return out, featureLayer, None
+        if self.kl:
+            outputslist = list()
+            outputslist.append(self.deeplayer3(layer4.flatten(start_dim=1)))
+            outputslist.append(self.deeplayer2(layer3.flatten(start_dim=1)))
+            outputslist.append(self.deeplayer1(layer2.flatten(start_dim=1)))
+            outputslist.append(self.deeplayer0(layer1.flatten(start_dim=1)))
+            return x, featureLayer, outputslist
+        return x, featureLayer, innerlayers
+
+def Quicknet_ctor(num_classes):
+    return Quicknet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
+def ResNet18(num_classes, extraClasses=1, extraLayer=1, extraFeat=False, d=3,kl=False):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes, extraClasses, extraLayer, extraFeat=extraFeat, d=d,kl=kl)
 
 
-def ResNet34():
-    return ResNet(BasicBlock, [3, 4, 6, 3])
+def ResNet34(num_classes, extraClasses=1, extraLayer=1, extraFeat=False, d=3,kl=False):
+    return ResNet(BasicBlock, [3, 4, 6, 3], num_classes, extraClasses, extraLayer, extraFeat=extraFeat, d=d,kl=kl)
 
 
 def ResNet50():

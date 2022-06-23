@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 import wandb
+import matplotlib.patches as mpatches
 
 colors_per_class = {
     'plane' : [254, 202, 87],
@@ -28,8 +29,9 @@ colors_per_class = {
     'seven' : [87, 101, 116],
     'eight' : [52, 31, 151],
     'nine' : [0, 0, 0],
-    'zero' : [100, 100, 255],
-
+    'ten' : [100, 100, 255],
+    '11': [87, 101, 0],
+    '12' : [10, 189, 0],
 }
 
 colors_per_classEx = {
@@ -58,15 +60,12 @@ colors_per_classEx = {
 }
 
 
-def random_color():
-    levels = range(32,256,32)
-    return tuple(random.choice(levels) for _ in range(3))
-
-def showtsne(features,targets ,address,mode,numClasses=10):
-    if numClasses > 10:
-        colors_per_classt = colors_per_classEx
-    else:
-        colors_per_classt = colors_per_class
+def showtsne(features,targets ,address,numClasses=10 , epoch = ''):
+    # if numClasses > 10:
+    #     colors_per_classt = colors_per_classEx
+    # else:
+    #     colors_per_classt = colors_per_class
+    colors_per_classt = colors_per_classEx
     print("starting TSNE")
     tsne = TSNE(n_components=2).fit_transform(features)
     print("finish TSNE")
@@ -81,12 +80,21 @@ def showtsne(features,targets ,address,mode,numClasses=10):
     NUM_COLORS = 20
     fig = plt.figure()
     ax = fig.add_subplot(111)
+    plt.xlim(left=0)
+    plt.xlim(right=1)
+    plt.ylim(top=1)
+    plt.ylim(bottom=0)
     # ax.set_color_cycle([cm(1. * i / NUM_COLORS) for i in range(NUM_COLORS)])
     # for every class, we'll add a scatter plot separately
+    cnt = 0
     for ind ,label in enumerate(colors_per_classt):
 
         # find the samples of the current class in the data
         indices = [i for i, l in enumerate(targets) if l == ind]
+        if len(indices) > 100:
+            cnt += 1
+        if len(indices)==0:
+            continue
 
         # extract the coordinates of the points of this class only
         current_tx = np.take(tx, indices)
@@ -98,15 +106,81 @@ def showtsne(features,targets ,address,mode,numClasses=10):
         # add a scatter plot with the corresponding color and label
         ax.scatter(current_tx, current_ty, c=color, label=label)
 
-    # build a legend using the labels we set previously
-    ax.legend(loc='best')
 
+    # build a legend using the labels we set previously
+    # ax.legend(loc='best')
+    s = str(cnt)
+    green_patch = mpatches.Patch(color='green', label=s)
+
+    plt.legend(handles=[green_patch])
     # wandb.log({"point_cloud": wandb.Object3D(ax)})
     # finally, show the plot
-    plt.savefig(address+ 'tsne.png')
+    plt.savefig(address+ 'tsne' + epoch +' .png'  )
 
-    wandb.log({mode: wandb.Image(address + 'tsne.png')})
+    # wandb.log({mode: wandb.Image(address + 'tsne.png')})
     # plt.show()
+
+
+def showtsneOneclass(features,targets ,address,numClasses=10 , epoch = ''):
+    # if numClasses > 10:
+    #     colors_per_classt = colors_per_classEx
+    # else:
+    #     colors_per_classt = colors_per_class
+    colors_per_classt = colors_per_classEx
+    print("starting TSNE")
+    tsne = TSNE(n_components=2).fit_transform(features)
+    print("finish TSNE")
+    # extract x and y coordinates representing the positions of the images on T-SNE plot
+    tx = tsne[:, 0]
+    ty = tsne[:, 1]
+    cm = plt.get_cmap('gist_rainbow')
+
+    tx = scale_to_01_range(tx)
+    ty = scale_to_01_range(ty)
+    # initialize a matplotlib plot
+    NUM_COLORS = 20
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.xlim(left=0)
+    plt.xlim(right=1)
+    plt.ylim(top=1)
+    plt.ylim(bottom=0)
+    # ax.set_color_cycle([cm(1. * i / NUM_COLORS) for i in range(NUM_COLORS)])
+    # for every class, we'll add a scatter plot separately
+    cnt = 0
+    for ind ,label in enumerate(colors_per_classt):
+        if ind == 0:
+            continue
+        # find the samples of the current class in the data
+        indices = [i for i, l in enumerate(targets) if l == ind]
+        if len(indices) > 100:
+            cnt += 1
+        if len(indices)==0:
+            continue
+
+        # extract the coordinates of the points of this class only
+        current_tx = np.take(tx, indices)
+        current_ty = np.take(ty, indices)
+
+        # convert the class color to matplotlib format
+        color = np.array(colors_per_classt[label], dtype=np.float) / 255
+
+        # add a scatter plot with the corresponding color and label
+        ax.scatter(current_tx, current_ty, c=color, label=label)
+
+
+    # build a legend using the labels we set previously
+    ax.legend(loc='best')
+    s = str(cnt)
+    green_patch = mpatches.Patch(color='green', label=s)
+
+    plt.legend(handles=[green_patch])
+    # wandb.log({"point_cloud": wandb.Object3D(ax)})
+    # finally, show the plot
+    plt.savefig(address+ 'tsne' + epoch +' .png'  )
+
+    # wandb.log({mode: wandb.Image(address + 'tsne.png')})
+    plt.show()
 
 # scale and move the coordinates so they fit [0; 1] range
 def getFeat(idx,overclass,predicted,predictedext,totalPredict,current_outputs,output):
