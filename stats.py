@@ -37,8 +37,16 @@ def calcHist(outputs,predicted,histIdx,gradeHist,extraClass):
         gradeHist[idx][extraClass * pred:extraClass * pred + extraClass] = predProb
         histIdx[predicted[i].item()] += 1
     return gradeHist
-def showHist(gradeHist, address ,numHist,union,epoch=''):
-    fig, axs = plt.subplots(2, int(numHist/2))
+def calcHist_perclass(outputs,predicted,histIdx,gradeHist,extraClass):
+    for i in range(len(outputs)):
+        idx = int(histIdx[predicted[i].item()])
+        pred = predicted[i].item()
+        predProb = F.softmax(outputs[i], dim=0)
+        gradeHist[idx] = predProb
+        histIdx[predicted[i].item()] += 1
+    return gradeHist
+def showHist(gradeHist, address ,numHist,union,extraclass = 2,epoch=''):
+    fig, axs = plt.subplots(extraclass, int(numHist/2))
     k = 0
     j = 0
     for i in range(numHist):
@@ -54,11 +62,11 @@ def showHist(gradeHist, address ,numHist,union,epoch=''):
 
         k += 1
 
-        if k > 1:
+        if k > extraclass-1:
             k = 0
             j += 1
 
-        if union and i == 8:
+        if union and i == 9:
             break
     plt.savefig(address + 'histogram ' + str(epoch))
 

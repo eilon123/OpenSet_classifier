@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import copy
 from models import *
-from models.AE import BasicAE
+from models.AE import ae_cluster
 import os
 import torch
 from sklearn.model_selection import train_test_split
@@ -49,6 +49,7 @@ def changeTar(set, dict):
 
 
 def createDataset(trainset, classidx_to_keep, isTrain, batchSize, imbalance=False, test=False,falselabels=0,part=0):
+
     targets = trainset.targets[:]
     outputSet = copy.deepcopy(trainset)
 
@@ -84,6 +85,7 @@ def partialDataset(trainset, percentage):
 
     # Warp into Subsets and DataLoaders
     train_dataset = torch.utils.data.Subset(trainset, train_indices)
+
     print(len(train_dataset.dataset.targets))
     return train_dataset
 
@@ -92,15 +94,22 @@ def createTrainloader(args, trainset, classidx_to_keep=0):
     if args.openset and not args.trans or args.ae:
         trainloader, _ = createDataset(trainset, classidx_to_keep, True, args.batch,falselabels=args.falselabels,part=args.parts)
     elif args.trans and not(args.union):
+        if args.transunion:
+            trainloader = torch.utils.data.DataLoader(
+                trainset, batch_size=args.batch, shuffle=False, num_workers=8)
 
-        fulltrainSet = copy.deepcopy(trainset)
-        trainloader, _ = createDataset(fulltrainSet, np.arange(10), True, args.batch)
+        else:
+            fulltrainSet = copy.deepcopy(trainset)
+            trainloader, _ = createDataset(fulltrainSet, np.arange(10), True, args.batch)
         return trainloader
     else:
         if args.union:
             if args.imbalance:
-                _, trainset = createDataset(trainset, np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), isTrain=True,
+                _, trainset = createDataset(trainset, np.arange(10), isTrain=True,
                                             batchSize=1, imbalance=args.imbalance, test=False)
+            if len(classidx_to_keep) < 10:
+                _, trainset = createDataset(trainset, classidx_to_keep, isTrain=True,
+                                            batchSize=1, imbalance=0, test=False)
             # tmp
 
             # _, trainset = createDataset(trainset, np.array([0,1,2,3]), isTrain=True,
@@ -113,6 +122,10 @@ def createTrainloader(args, trainset, classidx_to_keep=0):
                 else:
                     trainset.classes = trainset.classes[:int(len(trainset.classes) / 2)]
                     break
+
+            if args.part:
+                party = 5
+                trainset = partialDataset(trainset, percentage=10 * party)
         trainloader = torch.utils.data.DataLoader(
             trainset, batch_size=args.batch, shuffle=False, num_workers=8)
         classidx_to_keep = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -128,20 +141,22 @@ def createTestloader(args, testset, classidx_to_keep=0,externalotest =0):
 
     else:
         if args.union:
+
+            if len(classidx_to_keep) < 10:
+                _, testset = createDataset(testset, classidx_to_keep, isTrain=True,
+                                            batchSize=1, imbalance=0, test=False)
             fullTestset = copy.deepcopy(testset)
-            # tmp
-            # _, testset = createDataset(testset, np.array([0, 1, 2, 3]), isTrain=True,
-            #                             batchSize=1, test=False)
-            # _,fullTestset= createDataset(testset, np.array([0, 1, 2, 3]), isTrain=True,
-            #                             batchSize=1, test=False)
             if args.imbalance:
-                _, testset = createDataset(testset, np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), isTrain=False,
+                _, testset = createDataset(testset, np.arange(10), isTrain=False,
                                            batchSize=1, imbalance=args.imbalance, test=False)
+                fullTestset = copy.deepcopy(testset)
             for i, tar in enumerate(testset.targets):
                 testset.targets[i] = int(np.floor(tar / args.extraclass))
 
         testloader = torch.utils.data.DataLoader(
             testset, batch_size=args.batch, shuffle=False, num_workers=8)
+
+
     return testloader, fullTestset
 
 
@@ -170,7 +185,7 @@ def chooseNet(args, device, extraClasses=2):
     else:
         net = ResNet18(
             num_classes=10  +2*args.openset*args.overclass +10 * (args.extraclass - 1) * args.overclass * (args.trans == 0) * (args.openset == 0),
-             d=d,kl=args.kl)
+             d=d,kl=args.kl,fc = args.fc and (not(args.resume) or args.trans))
         # net = ResNet34(
         #     num_classes=10 + 2 * args.openset * args.overclass + 10 * (args.extraclass - 1) * args.overclass * (
         #                 args.trans == 0) * (args.openset == 0),
@@ -233,9 +248,9 @@ def findAddress(args):
         address += 'overclass/checkpoint/ckpt.pth'
 
     else:
-        address += 'checkpoint/ckpt.pth'
+        address += ''
     print(address)
-    assert os.path.exists(address), 'Error: no checkpoint directory found!'
+    # assert os.path.exists(address), 'Error: no checkpoint directory found!'
 
     return address
 
@@ -330,7 +345,7 @@ def weight_lst(net):
     """
     return [w for w in net.parameters()]
 
-def bulid_openmax(vectorWise, pca, iskmeans, alpha, orderW, quicknet, net):
+def bulid_openmax(vectorWise, pca, iskmeans, alpha, orderW, quicknet, net,classes):
     open_max_t = {"vectorWise": 1, "pca": 0, "iskmeans": 0, "alpha": 0.5, "orderW": [], "quicknet": 0, "net": 0}
     open_max_t["vectorWise"] = vectorWise
     open_max_t["pca"] = pca
@@ -339,4 +354,5 @@ def bulid_openmax(vectorWise, pca, iskmeans, alpha, orderW, quicknet, net):
     open_max_t["orderW"] = orderW
     open_max_t["quicknet"] = quicknet
     open_max_t["net"] = net
+    open_max_t["classes"] = classes
     return open_max_t

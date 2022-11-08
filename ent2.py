@@ -25,7 +25,7 @@ class HLoss(nn.Module):
             b = -1.0 * b.mean()
         return b
 class Entropy2():
-    def __init__(self, args, device):
+    def __init__(self, args, device,Nclasses=6):
         super(Entropy2, self).__init__()
         self.isTrans = args.trans
         self.extraclass = args.extraclass
@@ -35,7 +35,7 @@ class Entropy2():
         self.Kunif = args.Kunif
         self.Kuniq = args.Kuniq
         self.stopindex = args.stop
-
+        self.Nclasses = Nclasses
     def CalcEntropyLoss(self, outputs):
         newOutputs = torch.zeros(len(outputs), np.shape(outputs)[1] // self.extraclass).cuda()
         if not self.isTrans:
@@ -58,12 +58,13 @@ class Entropy2():
         k = 0
         maxEnt = (self.criterion(unifarr[0 * self.extraclass:
                     (0 + 1) * self.extraclass]))
-        for i in range(np.shape(newOutputs)[1]):
+        self.Nclasses=2
+        for i in range(self.Nclasses):
             if not self.isTrans:
 
 
                 uniformLoss -= self.Kunif * self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass])
-
+                # uniformLoss += self.Kunif * (maxEnt - self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass]))
                 # input = mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass]
                 input = mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:,i * self.extraclass:(i + 1) * self.extraclass]
                 input = input[torch.abs(input.sum(dim=1)) != 0]
@@ -77,9 +78,37 @@ class Entropy2():
 
             if self.isTrans and i == 4:
                 break
-
+        print(2*maxEnt + uniformLoss/self.Kunif)
         return uniquenessLoss, uniformLoss, newOutputs
+    def calcent(self,outputs):
+        return self.criterion(outputs)
+    def CalcEntropyLoss_perclass(self, outputs):
 
+        if not self.isTrans:
+
+            sumProb = (1 / self.batch_size) * torch.sum(outputs, dim=0)
+        scores = F.softmax(outputs, dim=1)
+
+        uniformLoss = 0
+        uniquenessLoss = 0
+        unifarr = torch.ones(int(np.shape(outputs)[1]))
+        unifarr = unifarr.to(self.device)
+        k = 0
+
+        for i in range(np.shape(outputs)[1]):
+            if not self.isTrans:
+
+
+                uniformLoss -= self.Kunif * self.criterion(sumProb)
+
+                input = outputs
+                input = input[torch.abs(input.sum(dim=1)) != 0]
+                uniquenessLoss += (self.Kuniq ) * self.criterion(input)
+
+
+
+
+        return uniquenessLoss, uniformLoss
     def CalcKLloss(self, outputs,scores):
         loss = 0
         prob = sft(scores)

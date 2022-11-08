@@ -42,6 +42,11 @@ def parse():
     parser.add_argument('--numOftrain', default=20, type=int, help='Classes used in testing')
     parser.add_argument('--Kunif', default=2, type=float, help='Classes used in testing')
     parser.add_argument('--Kuniq', default=0.1, type=float, help='Classes used in testing')
+    parser.add_argument('--mu', default=0.1, type=float, help='Classes used in testing')
+    parser.add_argument('--Nclasses', default=6, type=float, help='Classes used in testing')
+    parser.add_argument('--fc', '-fc', default=0, action='store_true')
+    parser.add_argument('--falseLayer', default=0, type=float, help='Classes used in testing')
+    parser.add_argument('--entropy', '-entropy', default=0, action='store_true')
     parser.add_argument('--lamda', default=5e-4, type=float, help='Classes used in testing')
     parser.add_argument('--batch', default=500, type=int, help='Classes used in testing')
     parser.add_argument('--load_path', default="", type=str,

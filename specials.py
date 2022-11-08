@@ -31,28 +31,29 @@ class specials:
         self.cls = osvm(args, self.device, self.net, self.trainset, self.testloader, self.testset.targets[:], address)
 
     def flow(self):
-        x=self.deepNN
+        x=self.deepNN_func()
         self.osvm
         self.pca_util
         self.level
         self.orth
-    def deepNN(self):
+    def deepNN_func(self):
         if not (self.NN):
             return
+        classes = np.arange(10)
         centroids = getCentroids(self.net, self.device, self.trainset, self.classidx_to_keep)
         newTestset = copy.deepcopy(self.trainset)
         newTestset.targets = torch.utils.data.ConcatDataset([self.trainset.targets, self.testset.targets])
         newTestset.data = torch.utils.data.ConcatDataset([self.trainset.data, self.testset.data])
 
-        tsne, TSNEcenteroids = getCentroidsTSNE(self.net, self.device, newTestset, self.classidx_to_keep)
-        correctCent = classify(self.net, self.device, self.testloader, centroids)
-        correcttsne = classifyTSNE(tsne, self.testloader, TSNEcenteroids, len(self.trainset), self.device)
-        print("centriod correct is: ", correctCent)
-        print("tsne correct is: ", correcttsne)
+        # tsne, TSNEcenteroids = getCentroidsTSNE(self.net, self.device, newTestset, self.classidx_to_keep)
+        # correctCent = classify(self.net, self.device, self.testloader, centroids)
+        # correcttsne = classifyTSNE(tsne, self.testloader, TSNEcenteroids, len(self.trainset), self.device)
+        # print("centriod correct is: ", correctCent)
+        # print("tsne correct is: ", correcttsne)
 
-        centroidsFeat, centroidsL1, centroidsL2, centroidsL3, centroidsL4 = getCentroids(self.net, self.device,
+        centroidsFeat,_, centroidsL1, centroidsL2, centroidsL3, centroidsL4 = getCentroids(self.net, self.device,
                                                                                          self.trainset,
-                                                                                         self.classidx_to_keep)
+                                                                                         classes)
         classify(self.net, self.device, self.testloader, centroidsFeat, centroidsL1, centroidsL2, centroidsL3,
                  centroidsL4)
 

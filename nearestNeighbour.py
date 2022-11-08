@@ -19,7 +19,7 @@ def getCentroids(net,device,trainset,classes):
             trainloader,_ = createDataset(trainsetFiltered, np.array([label]),False,batchSize=500)
             for batch_idx, (inputs, targets) in enumerate(trainloader):
                 inputs, targets = inputs.to(device), targets.to(device)
-                outputs,_, featureLayer,innerLayers= net(inputs)
+                outputs, featureLayer,innerLayers= net(inputs)
 
 
                 featureLayer = featureLayer.cpu().numpy()
@@ -36,30 +36,30 @@ def getCentroids(net,device,trainset,classes):
                     layer4Tot = layer4
                 else:
                     features = np.concatenate((features, featureLayer))
-                    # layer1Tot = np.concatenate((layer1Tot, layer1))
-                    # layer2Tot = np.concatenate((layer2Tot, layer2))
-                    # layer3Tot = np.concatenate((layer3Tot, layer3))
-                    # layer4Tot = np.concatenate((layer4Tot, layer4))
+                    layer1Tot = np.concatenate((layer1Tot, layer1))
+                    layer2Tot = np.concatenate((layer2Tot, layer2))
+                    layer3Tot = np.concatenate((layer3Tot, layer3))
+                    layer4Tot = np.concatenate((layer4Tot, layer4))
 
             if ind == 0:
                 centroidsFeat = ([features.mean(axis=0)])
                 clusterVar = ([features.var(axis=0)])
 
-                # centroidsL1 = ([layer1Tot.mean(axis=0)])
-                # centroidsL2 = ([layer2Tot.mean(axis=0)])
-                # centroidsL3 = ([layer3Tot.mean(axis=0)])
-                # centroidsL4 = ([layer4Tot.mean(axis=0)])
+                centroidsL1 = ([layer1Tot.mean(axis=0)])
+                centroidsL2 = ([layer2Tot.mean(axis=0)])
+                centroidsL3 = ([layer3Tot.mean(axis=0)])
+                centroidsL4 = ([layer4Tot.mean(axis=0)])
 
             else:
                 centroidsFeat = np.concatenate((centroidsFeat, ([features.mean(axis=0)])),axis=0)
                 clusterVar = np.concatenate((clusterVar, ([features.var(axis=0)])))
-                # centroidsL1 = np.concatenate((centroidsL1, ([layer1Tot.mean(axis=0)])), axis=0)
-                # centroidsL2 = np.concatenate((centroidsL2, ([layer2Tot.mean(axis=0)])), axis=0)
-                # centroidsL3 = np.concatenate((centroidsL3, ([layer3Tot.mean(axis=0)])), axis=0)
-                # centroidsL4 = np.concatenate((centroidsL4, ([layer4Tot.mean(axis=0)])), axis=0)
+                centroidsL1 = np.concatenate((centroidsL1, ([layer1Tot.mean(axis=0)])), axis=0)
+                centroidsL2 = np.concatenate((centroidsL2, ([layer2Tot.mean(axis=0)])), axis=0)
+                centroidsL3 = np.concatenate((centroidsL3, ([layer3Tot.mean(axis=0)])), axis=0)
+                centroidsL4 = np.concatenate((centroidsL4, ([layer4Tot.mean(axis=0)])), axis=0)
 
 
-        return centroidsFeat,clusterVar#centroidsL1,centroidsL2,centroidsL3,centroidsL4
+        return centroidsFeat,clusterVar,centroidsL1,centroidsL2,centroidsL3,centroidsL4
 
 def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroidsL3,centroidsL4):
     net.eval()
@@ -76,7 +76,7 @@ def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroi
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs,extra,featureLayer,layer1,layer2,layer3,layer4 = net(inputs)
+            outputs,featureLayer,innerLayers = net(inputs)
 
             predictedFL = np.array([])
             predictedl1 = np.array([])
@@ -85,13 +85,13 @@ def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroi
             predictedl4 = np.array([])
 
             print(batch_idx)
-            for ind,row in enumerate(layer1.cpu().numpy()):
+            for ind,row in enumerate(innerLayers[0].cpu().numpy()):
                 dist = np.array([])
                 for i in range(len(centroidsFeat)):
                     dist = np.append(dist, (LA.norm(row - centroidsL1[i])))
                 predictedl1 = np.append(predictedl1, np.argmin(dist))
                 lastChange[ind] = predictedl1[ind]
-            for ind,row in enumerate(layer2.cpu().numpy()):
+            for ind,row in enumerate(innerLayers[1].cpu().numpy()):
                 dist = np.array([])
                 for i in range(len(centroidsFeat)):
                     dist = np.append(dist, (LA.norm(row - centroidsL2[i])))
@@ -100,7 +100,7 @@ def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroi
                     hist[int(batch_idx * testloader.batch_size + ind)] += 1
                 lastChange[ind] = predictedl2[ind]
 
-            for ind,row in enumerate(layer3.cpu().numpy()):
+            for ind,row in enumerate(innerLayers[2].cpu().numpy()):
                 dist = np.array([])
                 for i in range(len(centroidsFeat)):
                     dist = np.append(dist, (LA.norm(row - centroidsL3[i])))
@@ -108,7 +108,7 @@ def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroi
                 if lastChange[ind] != predictedl3[ind]:
                     hist[int(batch_idx * testloader.batch_size + ind)] += 1
                 lastChange[ind] = predictedl3[ind]
-            for ind,row in enumerate(layer4.cpu().numpy()):
+            for ind,row in enumerate(innerLayers[3].cpu().numpy()):
                 dist = np.array([])
                 for i in range(len(centroidsFeat)):
                     dist = np.append(dist, (LA.norm(row - centroidsL4[i])))
@@ -120,20 +120,20 @@ def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroi
                 predictedFL = np.append(predictedFL,np.argmin((LA.norm (row - centroidsFeat, ord=2, axis=1))))
                 if lastChange[ind] != predictedFL[ind]:
                     hist[int(batch_idx * testloader.batch_size + ind)] += 1
-            predictedFL[predictedFL == 2] = 8
-            predictedFL[predictedFL == 3] = 9
-
-            predictedl1[predictedl1 == 2] = 8
-            predictedl1[predictedl1 == 3] = 9
-
-            predictedl2[predictedl2 == 2] = 8
-            predictedl2[predictedl2 == 3] = 9
-
-            predictedl3[predictedl3 == 2] = 8
-            predictedl3[predictedl3 == 3] = 9
-
-            predictedl4[predictedl4 == 2] = 8
-            predictedl4[predictedl4 == 3] = 9
+            # predictedFL[predictedFL == 2] = 8
+            # predictedFL[predictedFL == 3] = 9
+            #
+            # predictedl1[predictedl1 == 2] = 8
+            # predictedl1[predictedl1 == 3] = 9
+            #
+            # predictedl2[predictedl2 == 2] = 8
+            # predictedl2[predictedl2 == 3] = 9
+            #
+            # predictedl3[predictedl3 == 2] = 8
+            # predictedl3[predictedl3 == 3] = 9
+            #
+            # predictedl4[predictedl4 == 2] = 8
+            # predictedl4[predictedl4 == 3] = 9
 
             total += targets.size(0)
 
@@ -154,7 +154,7 @@ def classify(net,device,testloader,centroidsFeat,centroidsL1,centroidsL2,centroi
             predictedl4 = torch.tensor(predictedl4, device=device)
             correct5 += predictedl4.eq(targets).sum().item()
 
-    torch.histc(hist)
+    # torch.histc(hist)
     print("by FL: ", correct1 / total)
     print("by L1: ", correct2 / total)
     print("by L2: ", correct3 / total)

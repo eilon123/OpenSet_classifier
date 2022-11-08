@@ -4,21 +4,22 @@ from sklearn.manifold import TSNE
 import wandb
 import matplotlib.patches as mpatches
 
-colors_per_class = {
-    'plane' : [254, 202, 87],
-    'car' : [255, 107, 107],
-    'bird' : [10, 189, 227],
-    'cat' : [255, 159, 243],
-    'deer' : [16, 172, 132],
-    'dog' : [128, 80, 128],
-    'frog' : [87, 101, 116],
-    'horse' : [52, 31, 151],
-    'ship' : [0, 0, 0],
-    'truck' : [100, 100, 255],
-    'unknown': [159, 159, 159]
+colors_per_one_class = {
+    'train' : [254, 202, 87],
+    'test' : [255, 107, 107],
+    'open set' : [10, 189, 227],
+
 
 }
+colors_per_one_class_Kmeans = {
+    'train - cluster1' : [254, 202, 87],
+    'train - cluster2' : [255, 107, 107],
+    'test - cluster1' : [10, 189, 227],
+    'test - cluster2' : [255, 159, 243],
+    'open set - cluster1' : [16, 172, 132],
+    'open set - cluster2' : [128, 80, 128],
 
+}
 colors_per_class = {
     'one' : [254, 202, 87],
     'two' : [255, 107, 107],
@@ -58,16 +59,19 @@ colors_per_classEx = {
     'unknown': [159, 159, 159],
 
 }
-
-
+from umap import *
 def showtsne(features,targets ,address,numClasses=10 , epoch = ''):
     # if numClasses > 10:
     #     colors_per_classt = colors_per_classEx
     # else:
     #     colors_per_classt = colors_per_class
-    colors_per_classt = colors_per_classEx
+    colors_per_classt = colors_per_class
+    # colors_per_classt = colors_per_one_class_Kmeans
     print("starting TSNE")
     tsne = TSNE(n_components=2).fit_transform(features)
+    # tsne = UMAP(n_neighbors=5,
+    #             min_dist=0.3,
+    #             metric='correlation').fit_transform(features)
     print("finish TSNE")
     # extract x and y coordinates representing the positions of the images on T-SNE plot
     tx = tsne[:, 0]
@@ -108,11 +112,11 @@ def showtsne(features,targets ,address,numClasses=10 , epoch = ''):
 
 
     # build a legend using the labels we set previously
-    # ax.legend(loc='best')
-    s = str(cnt)
-    green_patch = mpatches.Patch(color='green', label=s)
-
-    plt.legend(handles=[green_patch])
+    ax.legend(loc='best')
+    # s = str(cnt)
+    # green_patch = mpatches.Patch(color='green', label=s)
+    #
+    # plt.legend(handles=[green_patch])
     # wandb.log({"point_cloud": wandb.Object3D(ax)})
     # finally, show the plot
     plt.savefig(address+ 'tsne' + epoch +' .png'  )
@@ -126,9 +130,13 @@ def showtsneOneclass(features,targets ,address,numClasses=10 , epoch = ''):
     #     colors_per_classt = colors_per_classEx
     # else:
     #     colors_per_classt = colors_per_class
-    colors_per_classt = colors_per_classEx
+    colors_per_classt = colors_per_one_class
+    colors_per_classt = colors_per_one_class_Kmeans
     print("starting TSNE")
-    tsne = TSNE(n_components=2).fit_transform(features)
+    tsne = UMAP(n_neighbors=5,
+                          min_dist=0.3,
+                          metric='correlation').fit_transform(features)
+    # tsne = TSNE(n_components=2,n_iter=250).fit_transform(features)
     print("finish TSNE")
     # extract x and y coordinates representing the positions of the images on T-SNE plot
     tx = tsne[:, 0]
@@ -149,7 +157,7 @@ def showtsneOneclass(features,targets ,address,numClasses=10 , epoch = ''):
     # for every class, we'll add a scatter plot separately
     cnt = 0
     for ind ,label in enumerate(colors_per_classt):
-        if ind == 0:
+        if ind ==-1:
             continue
         # find the samples of the current class in the data
         indices = [i for i, l in enumerate(targets) if l == ind]
@@ -171,13 +179,13 @@ def showtsneOneclass(features,targets ,address,numClasses=10 , epoch = ''):
 
     # build a legend using the labels we set previously
     ax.legend(loc='best')
-    s = str(cnt)
-    green_patch = mpatches.Patch(color='green', label=s)
-
-    plt.legend(handles=[green_patch])
+    # s = str(cnt)
+    # green_patch = mpatches.Patch(color='green', label=s)
+    #
+    # plt.legend(handles=[green_patch])
     # wandb.log({"point_cloud": wandb.Object3D(ax)})
     # finally, show the plot
-    plt.savefig(address+ 'tsne' + epoch +' .png'  )
+    # plt.savefig(address+ 'tsne' + epoch +' .png'  )
 
     # wandb.log({mode: wandb.Image(address + 'tsne.png')})
     plt.show()
