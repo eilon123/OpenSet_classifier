@@ -198,7 +198,7 @@ def chooseNet(args, device, extraClasses=2):
     elif args.overclass and args.featperclass and not args.trans:
         net = ResNet18(num_classes=10, extraClasses=1 + (extraClasses - 1) * args.overclass, extraFeat=True,
                        pool=args.pool, d=d,kl=args.kl)
-
+#todo
     else:
         net = ResNet18(
             num_classes=10  +2*args.openset*args.overclass +10 * (args.extraclass - 1) * args.overclass * (args.trans == 0) * (args.openset == 0),
