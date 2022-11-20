@@ -106,11 +106,13 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
     if args.part and party < 10:
         trainset = partialDataset(trainset, percentage=5000*party)
         # testset = partialDataset(testset)
-    if args.union:
+    if args.union and args.overclass and args.openset:
+        selectedClasses = np.arange(6)
+    elif args.union:
         selectedClasses = np.arange(5)
         # selectedClasses = np.arange(2)
     else:
-        selectedClasses = np.arange(5)
+        selectedClasses = np.arange(6)
     print("Selected class are %d", selectedClasses)
     classidx_to_keep = np.array(selectedClasses)
 
@@ -273,7 +275,7 @@ if __name__ == '__main__':
     myaurocl3 = list()
     myaurocl4 = list()
 
-    lisdir = os.listdir("arcfaceiter")
+    # lisdir = os.listdir("arcfaceiter")
     # for i,dir in enumerate(lisdir):
     for i in range(20):
         print("======== run number ",i)
@@ -283,125 +285,125 @@ if __name__ == '__main__':
         if i == 0:
             trainloss, test_loss, train_var, test_var, net, quicknet,orderW = main()
         exit()
-        save_address= ''
-        # save_address = " openset through epochs/" + str(i)
-        if test_loss > 20 :
-            vectoerWise=1
-            iskmeans = 1
-            pca=0
-            open_max_t = bulid_openmax(vectorWise=vectoerWise,pca=pca,iskmeans=iskmeans,alpha=(i+1)*0.05,orderW=orderW,quicknet=quicknet,net=net)
-            feat = get_model_features.get_model_features(args, open_max_t)
-            mav = MAV_Compute.mavClass(args=args,open_max_t= open_max_t)
-            dist = compute_distances.distcomupte(args,open_max_t )
-            open_max = compute_openmax.compute_openmax(args, open_max_t, save_path="")
-            stats = open_max_stats.openmax_stats(args,open_max_t , save_path="")
-            # stats.getoneCDF()
-
-
-            mav.setnumClusters(i+2)
-            open_max.setnumClusters(i + 2)
-            dist.setnumClusters(i+2)
-            if iskmeans:
-                open_max.setTailSize()
-            # if i ==0:
-            #     feat.restart()
-            #     feat.get_model_features_main()
-            # # stats.getTSNE()
-            #
-            # else:
-            #     feat.restart(0)
-            feat.restart(0)
-            mav.MAV_Compute_main()
-            dist.compute_distances_main()
-
-            if pca==0 and iskmeans ==0:
-                open_max.setAddress(-1)
-                myauroc,auroc = open_max.compute_openmax_main(save_address)
-                print(auroc)
-                aurocl.append(auroc)
-            # stats.routine()
-            if vectoerWise:
-                open_max.setAddress(0)
-                myauroc,auroc = open_max.compute_openmax_main(save_address)
-                aurocl0.append(auroc)
-                myaurocl0.append(myauroc)
-                print(aurocl0)
-                stats.setAddress(0)
-
-
-
-            if args.deepclassifier or args.f:
-                open_max.setAddress(1)
-                myauroc,auroc = open_max.compute_openmax_main()
-                print(auroc)
-                aurocl1.append(auroc)
-                myaurocl1.append(myauroc)
-
-                open_max.setAddress(2)
-                myauroc,auroc = open_max.compute_openmax_main()
-                print(auroc)
-                aurocl2.append(auroc)
-                myaurocl2.append(myauroc)
-
-                open_max.setAddress(3)
-                myauroc,auroc = open_max.compute_openmax_main()
-                print(auroc)
-                aurocl3.append(auroc)
-                myaurocl3.append(myauroc)
-
-                open_max.setAddress(4)
-                myauroc,auroc = open_max.compute_openmax_main()
-                print(auroc)
-                aurocl4.append(auroc)
-                myaurocl4.append(myauroc)
-
-            # closedsetlst.append(prec[0])
-            #
-            # misstakenlst.append(prec[4])
-            # opensetLst.append(opensetprec)
-        else:
-            x=-1
-
-
-    print(aurocl)
-    print("featlayer")
-    print(aurocl0)
-    print("L-2")
-    print(aurocl1)
-    print("L-3")
-    print(aurocl2)
-    print("L-4")
-    print(aurocl3)
-    print("L-5")
-    print(aurocl4)
-
-
-    print("my foking mehtod")
-    print("featlayer")
-    print(myaurocl0)
-    print("L-2")
-    print(myaurocl1)
-    print("L-3")
-    print(myaurocl2)
-    print("L-4")
-    print(myaurocl3)
-    print("L-5")
-    print(myaurocl4)
-
-    # print(closedsetlst)
-    # print(misstakenlst)
-    # print(opensetLst)
-    # plt.plot(aurocl)
-    # plt.savefig("auroc")
-    # plt.plot(closedsetlst)
-    # plt.savefig("closed")
+    #     save_address= ''
+    #     # save_address = " openset through epochs/" + str(i)
+    #     if test_loss > 20 :
+    #         vectoerWise=1
+    #         iskmeans = 1
+    #         pca=0
+    #         open_max_t = bulid_openmax(vectorWise=vectoerWise,pca=pca,iskmeans=iskmeans,alpha=(i+1)*0.05,orderW=orderW,quicknet=quicknet,net=net)
+    #         feat = get_model_features.get_model_features(args, open_max_t)
+    #         mav = MAV_Compute.mavClass(args=args,open_max_t= open_max_t)
+    #         dist = compute_distances.distcomupte(args,open_max_t )
+    #         open_max = compute_openmax.compute_openmax(args, open_max_t, save_path="")
+    #         stats = open_max_stats.openmax_stats(args,open_max_t , save_path="")
+    #         # stats.getoneCDF()
     #
-    # plt.plot(misstakenlst)
-    # plt.savefig("misstaken")
     #
-    # plt.plot(opensetLst)
-    # plt.savefig("openset")
-    # print("train loss " ,trainlst)
+    #         mav.setnumClusters(i+2)
+    #         open_max.setnumClusters(i + 2)
+    #         dist.setnumClusters(i+2)
+    #         if iskmeans:
+    #             open_max.setTailSize()
+    #         # if i ==0:
+    #         #     feat.restart()
+    #         #     feat.get_model_features_main()
+    #         # # stats.getTSNE()
+    #         #
+    #         # else:
+    #         #     feat.restart(0)
+    #         feat.restart(0)
+    #         mav.MAV_Compute_main()
+    #         dist.compute_distances_main()
+    #
+    #         if pca==0 and iskmeans ==0:
+    #             open_max.setAddress(-1)
+    #             myauroc,auroc = open_max.compute_openmax_main(save_address)
+    #             print(auroc)
+    #             aurocl.append(auroc)
+    #         # stats.routine()
+    #         if vectoerWise:
+    #             open_max.setAddress(0)
+    #             myauroc,auroc = open_max.compute_openmax_main(save_address)
+    #             aurocl0.append(auroc)
+    #             myaurocl0.append(myauroc)
+    #             print(aurocl0)
+    #             stats.setAddress(0)
+    #
+    #
+    #
+    #         if args.deepclassifier or args.f:
+    #             open_max.setAddress(1)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl1.append(auroc)
+    #             myaurocl1.append(myauroc)
+    #
+    #             open_max.setAddress(2)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl2.append(auroc)
+    #             myaurocl2.append(myauroc)
+    #
+    #             open_max.setAddress(3)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl3.append(auroc)
+    #             myaurocl3.append(myauroc)
+    #
+    #             open_max.setAddress(4)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl4.append(auroc)
+    #             myaurocl4.append(myauroc)
+    #
+    #         # closedsetlst.append(prec[0])
+    #         #
+    #         # misstakenlst.append(prec[4])
+    #         # opensetLst.append(opensetprec)
+    #     else:
+    #         x=-1
+    #
+    #
+    # print(aurocl)
+    # print("featlayer")
+    # print(aurocl0)
+    # print("L-2")
+    # print(aurocl1)
+    # print("L-3")
+    # print(aurocl2)
+    # print("L-4")
+    # print(aurocl3)
+    # print("L-5")
+    # print(aurocl4)
+    #
+    #
+    # print("my foking mehtod")
+    # print("featlayer")
+    # print(myaurocl0)
+    # print("L-2")
+    # print(myaurocl1)
+    # print("L-3")
+    # print(myaurocl2)
+    # print("L-4")
+    # print(myaurocl3)
+    # print("L-5")
+    # print(myaurocl4)
+    #
+    # # print(closedsetlst)
+    # # print(misstakenlst)
+    # # print(opensetLst)
+    # # plt.plot(aurocl)
+    # # plt.savefig("auroc")
+    # # plt.plot(closedsetlst)
+    # # plt.savefig("closed")
+    # #
+    # # plt.plot(misstakenlst)
+    # # plt.savefig("misstaken")
+    # #
+    # # plt.plot(opensetLst)
+    # # plt.savefig("openset")
+    # # print("train loss " ,trainlst)
     #
     # print("test loss ", testlst)
     #

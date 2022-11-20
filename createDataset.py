@@ -90,7 +90,21 @@ def partialDataset(trainset, percentage):
 
 def createTrainloader(args, trainset, classidx_to_keep=0):
     if args.openset and not args.trans or args.ae:
-        trainloader, _ = createDataset(trainset, classidx_to_keep, True, args.batch,falselabels=args.falselabels,part=args.parts)
+        if args.union and args.overclass:
+            _, trainset = createDataset(trainset, np.arange(len(classidx_to_keep)), isTrain=True,
+                                        batchSize=1, imbalance=args.imbalance, test=False)
+            for i, tar in enumerate(trainset.targets):
+                trainset.targets[i] = int(np.floor(tar / args.extraclass))
+            for i, tar in enumerate(trainset.classes):
+                if i < len(trainset.classes) / 2 - 1:
+                    trainset.classes[i] = trainset.classes[2 * i] + ' ' + trainset.classes[2 * i - 1]
+                else:
+                    trainset.classes = trainset.classes[:int(len(trainset.classes) / 2)]
+                    break
+            trainloader, _ = createDataset(trainset, np.arange(len(classidx_to_keep)/2), True, args.batch, falselabels=args.falselabels,
+                                       part=args.parts)
+        else:
+            trainloader, _ = createDataset(trainset, classidx_to_keep, True, args.batch,falselabels=args.falselabels,part=args.parts)
     elif args.trans and not(args.union):
 
         fulltrainSet = copy.deepcopy(trainset)
@@ -99,7 +113,7 @@ def createTrainloader(args, trainset, classidx_to_keep=0):
     else:
         if args.union:
             if args.imbalance:
-                _, trainset = createDataset(trainset, np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), isTrain=True,
+                _, trainset = createDataset(trainset, np.arange(10), isTrain=True,
                                             batchSize=1, imbalance=args.imbalance, test=False)
             # tmp
 
@@ -122,8 +136,23 @@ def createTrainloader(args, trainset, classidx_to_keep=0):
 def createTestloader(args, testset, classidx_to_keep=0,externalotest =0):
     fullTestset = copy.deepcopy(testset)
     if args.openset or externalotest:
-        testloader, set = createDataset(testset, classidx_to_keep, False, args.batch)
-        fullTestset = set
+        if args.union and args.overclass:
+            _, testset = createDataset(testset, np.arange(len(classidx_to_keep)), isTrain=True,
+                                       batchSize=1, imbalance=args.imbalance, test=False)
+            for i, tar in enumerate(testset.targets):
+                testset.targets[i] = int(np.floor(tar / args.extraclass))
+            for i, tar in enumerate(testset.classes):
+                if i < len(testset.classes) / 2 - 1:
+                    testset.classes[i] = testset.classes[2 * i] + ' ' + testset.classes[2 * i - 1]
+                else:
+                    testset.classes = testset.classes[:int(len(testset.classes) / 2)]
+                    break
+            testloader, _ = createDataset(testset, np.arange(len(classidx_to_keep) / 2), True, args.batch,
+                                           falselabels=args.falselabels,
+                                           part=args.parts)
+        else:
+            testloader, set = createDataset(testset, classidx_to_keep, False, args.batch)
+            fullTestset = set
 
 
     else:
@@ -137,6 +166,7 @@ def createTestloader(args, testset, classidx_to_keep=0,externalotest =0):
             if args.imbalance:
                 _, testset = createDataset(testset, np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), isTrain=False,
                                            batchSize=1, imbalance=args.imbalance, test=False)
+            fullTestset = copy.deepcopy(testset)
             for i, tar in enumerate(testset.targets):
                 testset.targets[i] = int(np.floor(tar / args.extraclass))
 
@@ -157,8 +187,10 @@ def chooseNet(args, device, extraClasses=2):
                 extraClasses - 1) * args.overclass, d=d)  # extraClasses=1 + (extraClasses - 1) * args.overclass)
     # elif args.ae:
     #     net = BasicAE()
-    elif args.union and args.overclass:
+    elif args.union and args.overclass and not args.openset:
         net = ResNet18(num_classes=10, d=d)  # extraClasses=1 + (extraClasses - 1) * args.overclass)
+    elif args.union and args.overclass and  args.openset:
+        net = ResNet18(num_classes=6 , d=d)  # extraClasses=1 + (extraClasses - 1) * args.overclass)
     elif args.union:
         net = ResNet18(num_classes=10, d=d)
     elif args.overclass and args.extraLayer:

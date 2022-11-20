@@ -37,8 +37,8 @@ def calcHist(outputs,predicted,histIdx,gradeHist,extraClass):
         gradeHist[idx][extraClass * pred:extraClass * pred + extraClass] = predProb
         histIdx[predicted[i].item()] += 1
     return gradeHist
-def showHist(gradeHist, address ,numHist,union,epoch=''):
-    fig, axs = plt.subplots(2, int(numHist/2))
+def showHist(gradeHist, address ,numHist,extraclasses,union,epoch=''):
+    fig, axs = plt.subplots(extraclasses, int(numHist/2))
     k = 0
     j = 0
     for i in range(numHist):
@@ -54,7 +54,7 @@ def showHist(gradeHist, address ,numHist,union,epoch=''):
 
         k += 1
 
-        if k > 1:
+        if k > extraclasses - 1:
             k = 0
             j += 1
 

@@ -35,7 +35,27 @@ class Entropy2():
         self.Kunif = args.Kunif
         self.Kuniq = args.Kuniq
         self.stopindex = args.stop
+        self.th = 0.343
+        self.reinforceFactor = 2
+        if args.lamda > 0.0005:
+            self.reinforceFactor = 2.5
+        if args.lamda > 0.0008:
+            self.reinforceFactor = 3
+        # reinfoce = 2
+        unifarr = torch.ones(20)
+        unifarr = unifarr.to(self.device)
 
+        self.maxEnt = (self.criterion(unifarr[0 * self.extraclass:
+                                         (0 + 1) * self.extraclass]))
+        self.th = 0.9896133871898443*self.maxEnt
+        self.Nclasses = int(((10 * int(args.openset==0) + 6*int(args.openset)) * (1+(args.overclass*args.extraclass-1))/(1+args.union)))
+    def setEpoch(self,epoch):
+        self.epoch = epoch
+    def reinfore_step(self,sumprob):
+        if self.epoch > 70 and self.criterion(sumprob)  < self.th:
+            return self.reinforceFactor*self.Kunif
+        else:
+            return self.Kunif
     def CalcEntropyLoss(self, outputs):
         newOutputs = torch.zeros(len(outputs), np.shape(outputs)[1] // self.extraclass).cuda()
         if not self.isTrans:
@@ -53,16 +73,17 @@ class Entropy2():
 
         uniformLoss = 0
         uniquenessLoss = 0
-        unifarr = torch.ones(int(np.shape(outputs)[1]))
-        unifarr = unifarr.to(self.device)
         k = 0
-        maxEnt = (self.criterion(unifarr[0 * self.extraclass:
-                    (0 + 1) * self.extraclass]))
-        for i in range(np.shape(newOutputs)[1]):
+
+        # for i in range(np.shape(newOutputs)[1]):
+        for i in range(int(self.Nclasses/self.extraclass)):
+
+
             if not self.isTrans:
 
-
-                uniformLoss -= self.Kunif * self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass])
+                # print( self.Kunif * self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass]))
+                Kunif = self.reinfore_step(sumProb[i * self.extraclass:(i + 1) * self.extraclass])
+                uniformLoss -= Kunif * self.criterion(sumProb[i * self.extraclass:(i + 1) * self.extraclass])
 
                 # input = mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:, k:k + self.extraclass]
                 input = mask[:, i * self.extraclass:(i + 1) * self.extraclass] * outputs[:,i * self.extraclass:(i + 1) * self.extraclass]

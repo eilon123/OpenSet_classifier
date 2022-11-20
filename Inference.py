@@ -196,6 +196,7 @@ class Inference:
                     predicteddeep.append(predicted)
 
             elif self.overclass:
+                self.ent.setEpoch(epoch)
                 uniquenessLoss, uniformLoss, newOutputs = self.ent.CalcEntropyLoss(outputs)
                 lossCE = criterion_unsoftmax((newOutputs), targets)
                 loss += lossCE
@@ -401,6 +402,7 @@ class Inference:
                         predicteddeep.append(predicted)
 
                 if self.overclass:
+                    self.ent.setEpoch(epoch)
                     uniquenessLoss, uniformLoss, newOutputs = self.ent.CalcEntropyLoss(outputs)
                     if not (self.openset):
                         lossCE = criterion_unsoftmax(sft(newOutputs), targets)
@@ -508,7 +510,7 @@ class Inference:
 
 
             if self.overclass:
-                showHist(gradeHist, self.address , len(outputs[0]), self.union,epoch)
+                showHist(gradeHist, self.address , len(outputs[0]),self.extraclass, self.union,epoch)
 
             # plt.figure()
             # plt.hist(totalPredict, bins=100,range=())
