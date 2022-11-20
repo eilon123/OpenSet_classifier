@@ -6,8 +6,6 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import copy
-import time
-
 import torchvision
 import os
 from opts import *
@@ -20,7 +18,9 @@ from ent2 import *
 from stats import *
 from models import *
 import numpy as np
+from scipy.special import softmax
 import wandb
+import random
 from open_max import get_model_features
 from open_max import compute_distances
 from open_max import open_max_stats
@@ -28,14 +28,34 @@ from open_max import compute_openmax
 
 from open_max import MAV_Compute
 from open_max import open_max_father
-from open_max.train_net import *
+
 
 
 # https://github.com/kuangliu/pytorch-cifar/blob/master/main.py
 # os.environ["WANDB_MODE"] = "dryrun"
 
 args = parse()
-
+def openmaxroutine(epoch,acc):
+    if epoch % 10 == 0 and acc > 30:
+        save_address = ""
+        feat.restart()
+        feat.get_model_features_main()
+        mav.MAV_Compute_main()
+        dist.compute_distances_main()
+        open_max.setAddress(0)
+        myauroc, auroc = open_max.compute_openmax_main(save_address)
+        aurocl0.append(auroc)
+        myaurocl0.append(myauroc)
+        open_max.setAddress(-1)
+        myauroc, auroc = open_max.compute_openmax_main(save_address)
+        aurocl.append(auroc)
+        myaurocl.append(myauroc)
+        res.append(acc)
+        print(aurocl0)
+        print(myaurocl0)
+        print(aurocl)
+        print(myaurocl0)
+        print(res)
 def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
 
     args.parts = party
@@ -66,10 +86,7 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
     if device == 'cuda':
         net = torch.nn.DataParallel(net)
         cudnn.benchmark = True
-    if args.union and args.trans:
-        args.transunion = True
-    else:
-        args.transunion = False
+
     args.union = args.union if not (args.union and args.trans) else False
 
     # Loading dataset
@@ -80,41 +97,22 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
         root='./data', train=False, download=True, transform=transform_test)
 
 
-
-    if args.union==0 and args.part:
-        party = 5
-        print("partial data given by ", party)
-        trainset = partialDataset(trainset, percentage=10 * party)
-    if args.union:
-        selectedClasses = np.arange(5)
-        selectedClasses = np.arange(4)
-    else:
-
-        aList = np.arange((10))
-        selectedClasses = np.array(np.sort(random.sample(list(aList), args.Nclasses)))
+    if args.rand:
+        # dict = np.random.randint(10, size=10)
+        dict = np.array([4, 3, 7, 2, 6, 1, 0, 8, 5, 9])
+        trainset = changeTar(trainset, dict)
+        testset = changeTar(testset, dict)
+    party = 1
+    if args.part and party < 10:
+        trainset = partialDataset(trainset, percentage=5000*party)
+        # testset = partialDataset(testset)
+    if args.union and args.overclass and args.openset:
         selectedClasses = np.arange(6)
-        # if args.resume and os.path.isfile(address + 'classes.xlsx') :
-        #     tmplist = []
-        #     csv_file = open(address + 'classes.xlsx', 'r')
-        #     x = csv_file.readline()
-        #     tmplist.append(int(x[0]))
-        #     tmplist.append(int(x[2]))
-        #     tmplist.append(int(x[4]))
-        #     tmplist.append(int(x[6]))
-        #     tmplist.append(int(x[8]) )
-        #     tmplist.append(int(x[10]))
-        #     selectedClasses = np.asarray(tmplist)
-        #         # selectedClasses = np.asarray(list(pd.read_excel(address + 'classes.xlsx').columns))
-        # else:
-        #     selectedClasses = np.arange(6)
-        #     selectedClasses = np.arange(2)
-        #     # selectedClasses = np.array([2,3,4,5,6,7])
-        #     if args.Nclasses == 5:
-        #         selectedClasses = np.arange(5)
-        #     if args.Nclasses == 2:
-        #         selectedClasses = np.arange(2)
-        if args.rand and args.resume == 0:
-            selectedClasses = np.arange(6)
+    elif args.union:
+        selectedClasses = np.arange(5)
+        # selectedClasses = np.arange(2)
+    else:
+        selectedClasses = np.arange(6)
     print("Selected class are %d", selectedClasses)
     classidx_to_keep = np.array(selectedClasses)
 
@@ -128,7 +126,8 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
         args.overclass = False
 
     ent = EntropyLoss(args, device)
-    ent2 = Entropy2(args, device,int(len(selectedClasses)))
+    ent2 = Entropy2(args, device)
+    # args.lamda = 0
     if newTrain == 1:
         optimizer = optim.SGD(net.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=args.lamda)
@@ -136,7 +135,7 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
 
     if args.trans :
         optimizer = optim.Adam(net.parameters(), lr=args.lr,
-                               weight_decay=args.lamda)
+                               weight_decay=5e-4)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
     reduce = 0
@@ -160,7 +159,7 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
     infer = Inference(args, device, net,
                       optimizer, trainloader,
                       testloader, fullTestset.targets[:],
-                      selectedClasses, reduce,
+                      classes, reduce,
                        ent2,best_acc)
 
     if infer.trans:
@@ -168,7 +167,7 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
     infer.setclasses(selectedClasses)
     # Epoch loop
     orderW=0
-    if args.ae ==0 and args.overclass ==0 and args.resume:
+    if args.ae ==0 and args.overclass ==0:
         w = weight_lst(net)
         weightValue = torch.sort(w[-2])[0]
         # 5 8 11 14 17 20 23 26 29 32 35 38
@@ -194,22 +193,25 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
         print("lowest var", torch.var(torch.cat(wlowest,0)).item())
         infer.setWeights(highest,lowest,order)
     quicknet = infer.Getquicknet()
-    if args.overclass and args.train:
-        add = infer.address
-        if len(args.save_path)>0:
-            add = args.save_path
-        csv_file = open(add + '/overclass params.xlsx', 'w')
-        csv_writer = csv.writer(csv_file, delimiter=",")
-        tmp = np.array(["Kunif","Kuniq"])
-        csv_writer.writerow(tmp)
-        tmp = np.array([str(args.Kunif),str(args.Kuniq)])
-        csv_writer.writerow(tmp)
-        csv_file.close()
-    for epoch in range(start_epoch, start_epoch + 600):
+    auroc0 = list()
+    myauroc0 = list()
+    aurocl= list()
+    myaurocl = list()
+    res = list()
+    vectoerWise = 1
+    iskmeans = 0
+    pca = 1
+    open_max_t = bulid_openmax(vectorWise=1, pca=0, iskmeans=0, alpha=(0 + 1) * 0.05, orderW=orderW,
+                               quicknet=quicknet, net=net)
+    feat = get_model_features.get_model_features(args, open_max_t)
+    mav = MAV_Compute.mavClass(args=args, open_max_t=open_max_t)
+    dist = compute_distances.distcomupte(args, open_max_t)
+    open_max = compute_openmax.compute_openmax(args, open_max_t, save_path="")
+    for epoch in range(start_epoch, start_epoch + 1000):
 
         spc = specials(args, device, net, trainset, testset, classidx_to_keep, trainloader, testloader,
                        infer.address)
-        spc.flow()
+        # spc.flow()
         if args.arcface:
             infer.setM(m)
         if args.train :
@@ -224,7 +226,7 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
             print("epoch num ",epoch)
 
             inspect = (epoch%10==0)  and (epoch > 10) and args.overclass == True
-            # inspect = 0
+
             if args.ae:
                 acc = infer.AEtest(epoch,False)
             else:
@@ -232,8 +234,8 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
                     acc,test_loss,test_var= infer.test(epoch, True)
                 else:
                     acc ,test_loss,test_var= infer.test(epoch,False,inspect=inspect)
-            # if epoch == start_epoch + 199 and args.ae:
-            #     acc ,test_loss,test_var = infer.AEtest(epoch, True)
+            if epoch == start_epoch + 199 and args.ae:
+                acc ,test_loss,test_var = infer.AEtest(epoch, True)
             if args.ae:
                 if acc < best_acc:
                     best_acc = acc
@@ -242,113 +244,169 @@ def main(party=1,m=0.2,net=0,optimizer=0,epochstop = 190):
                     best_acc = acc
         else:
             break
+
+
+        if epoch == start_epoch + 1000:
+            acc ,test_loss,test_var = infer.AEtest(epoch, True)
+
+
         print("================= best acc is",best_acc)
+
+
 
         scheduler.step()
     acc, test_loss, test_var = infer.test(epoch, True)
-
     quicknet = infer.Getquicknet()
-    return acc,net,quicknet,selectedClasses,orderW
+    return trainloss,acc,train_var,test_var,net,quicknet,orderW
 
 
 if __name__ == '__main__':
 
+    aurocl = list()
+    aurocl0 = list()
+    aurocl1 = list()
+    aurocl2 = list()
+    aurocl3 = list()
+    aurocl4 = list()
 
-    entl = list()
-    add = "entorpy no bias through layers"
-    listdir = os.listdir(add)
-    oneShot = 1
-    for i,dir in enumerate(listdir):
+    myaurocl0 = list()
+    myaurocl1 = list()
+    myaurocl2 = list()
+    myaurocl3 = list()
+    myaurocl4 = list()
 
-    # kneigh = [2,5,10,20,30,50,70,100,130,160,200,250,350,500,2,5,10,20,30,50,70,100,130,160,200,250,350,500]
-    # for i in range(14):
-    #     dir = 'newYear/mu 0.001_lamda 0.001_class2-7'
-    #     print(dir)
+    # lisdir = os.listdir("arcfaceiter")
+    # for i,dir in enumerate(lisdir):
+    for i in range(20):
         print("======== run number ",i)
-
-        if oneShot ==0:
-            args.load_path = os.path.join(add,dir)
-        # args.load_path = os.path.join("newshit",'mu 0.005')
-        test_loss, net,quicknet,selectedClasses,orderW = main()
-        if oneShot and args.resume ==0:
-            exit()
-        save_address= ''
-        # save_address = " openset through epochs/" + str(i)
-        if args.openset == 0 or args.Nclasses != 6:
-            exit()
-        if test_loss > 20 and 1 :
-            vectoerWise=1
-            iskmeans = 0
-            pca=0
-            args.aug=0
-            open_max_t = bulid_openmax(vectorWise=vectoerWise,pca=pca,iskmeans=iskmeans,alpha=(i+1)*0.05,orderW=orderW,quicknet=quicknet,net=net,classes=selectedClasses)
-            feat = get_model_features.get_model_features(args, open_max_t)
-            mav = MAV_Compute.mavClass(args=args,open_max_t= open_max_t)
-            dist = compute_distances.distcomupte(args,open_max_t )
-            open_max = compute_openmax.compute_openmax(args, open_max_t, save_path="")
-            stats = open_max_stats.openmax_stats(args,open_max_t , save_path="")
-
-            mav.setnumClusters(i+2)
-            open_max.setnumClusters(i + 2)
-            dist.setnumClusters(i+2)
-            if iskmeans:
-                open_max.setTailSize()
-
-
-            feat.restart()
-            feat.get_model_features_main()
-            mav.MAV_Compute_main()
-            ent = dist.compute_distances_main()
-            # stats.getDists()
-            # stats.getNNDists()
-
-
-            if len(args.load_path) > 0:
-                csv_file = open(args.load_path + '/results.xlsx', 'w')
-            else:
-                address = findAddress(args)
-                csv_file = open(address + '/results.xlsx', 'w')
-            csv_writer = csv.writer(csv_file, delimiter=",")
-
-            tmp = np.array([" ", "L", "L-1", "L-2", "L-3", "L-4", "L-5", "L-6"])
-            csv_writer.writerow(tmp)
-
-
-            open_max.setNN(0)
-            open_max.setCosine(0)
-            open_max.setDependent(0)
-            auroc ,myauroc =open_max.runOpenmax(open_max,  save_address)
-            tmp = np.array(["open max class independent",auroc[0],auroc[1],auroc[2],auroc[3], auroc[4],auroc[5],auroc[6]])
-            csv_writer.writerow(tmp)
-
-            open_max.setNN(0)
-            open_max.setCosine(0)
-            open_max.setDependent(1)
-            auroc, myauroc = open_max.runOpenmax(open_max, save_address)
-            tmp = np.array(["open max class dependent", auroc[0], auroc[1], auroc[2], auroc[3], auroc[4], auroc[5], auroc[6]])
-            csv_writer.writerow(tmp)
-
-
-            open_max.setNN(1)
-            open_max.setCosine(0)
-            open_max.setDependent(1)
-            auroc, myauroc = open_max.runOpenmax(open_max, save_address,skip=1)
-            tmp = np.array(["D-SCR NN class dependent", myauroc[0], myauroc[1], myauroc[2], myauroc[3], auroc[4], myauroc[5], myauroc[6]])
-            csv_writer.writerow(tmp)
-
-
-            open_max.setNN(1)
-            open_max.setCosine(1)
-            open_max.setDependent(1)
-            auroc, myauroc = open_max.runOpenmax(open_max, save_address,skip=1)
-            tmp = np.array(["Angle D-SCR NN class dependent", myauroc[0], myauroc[1], myauroc[2], myauroc[3], auroc[4], myauroc[5], myauroc[6]])
-            csv_writer.writerow(tmp)
-
-
-            tmp = np.array(["accuracy",test_loss," "," "," "," "," "," "])
-            csv_writer.writerow(tmp)
-
-            csv_file.close()
-            if oneShot == 1:
-                exit()
-
+        # args.load_path = os.path.join("arcfaceiter",dir)
+        # trainloss,test_loss,train_var,test_var ,net,quicknet= main(m = 0.005*(i+1))
+        # trainloss, test_loss, train_var, test_var, net ,quicknet= main(m=0.005 * (15 + 1))
+        if i == 0:
+            trainloss, test_loss, train_var, test_var, net, quicknet,orderW = main()
+        exit()
+    #     save_address= ''
+    #     # save_address = " openset through epochs/" + str(i)
+    #     if test_loss > 20 :
+    #         vectoerWise=1
+    #         iskmeans = 1
+    #         pca=0
+    #         open_max_t = bulid_openmax(vectorWise=vectoerWise,pca=pca,iskmeans=iskmeans,alpha=(i+1)*0.05,orderW=orderW,quicknet=quicknet,net=net)
+    #         feat = get_model_features.get_model_features(args, open_max_t)
+    #         mav = MAV_Compute.mavClass(args=args,open_max_t= open_max_t)
+    #         dist = compute_distances.distcomupte(args,open_max_t )
+    #         open_max = compute_openmax.compute_openmax(args, open_max_t, save_path="")
+    #         stats = open_max_stats.openmax_stats(args,open_max_t , save_path="")
+    #         # stats.getoneCDF()
+    #
+    #
+    #         mav.setnumClusters(i+2)
+    #         open_max.setnumClusters(i + 2)
+    #         dist.setnumClusters(i+2)
+    #         if iskmeans:
+    #             open_max.setTailSize()
+    #         # if i ==0:
+    #         #     feat.restart()
+    #         #     feat.get_model_features_main()
+    #         # # stats.getTSNE()
+    #         #
+    #         # else:
+    #         #     feat.restart(0)
+    #         feat.restart(0)
+    #         mav.MAV_Compute_main()
+    #         dist.compute_distances_main()
+    #
+    #         if pca==0 and iskmeans ==0:
+    #             open_max.setAddress(-1)
+    #             myauroc,auroc = open_max.compute_openmax_main(save_address)
+    #             print(auroc)
+    #             aurocl.append(auroc)
+    #         # stats.routine()
+    #         if vectoerWise:
+    #             open_max.setAddress(0)
+    #             myauroc,auroc = open_max.compute_openmax_main(save_address)
+    #             aurocl0.append(auroc)
+    #             myaurocl0.append(myauroc)
+    #             print(aurocl0)
+    #             stats.setAddress(0)
+    #
+    #
+    #
+    #         if args.deepclassifier or args.f:
+    #             open_max.setAddress(1)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl1.append(auroc)
+    #             myaurocl1.append(myauroc)
+    #
+    #             open_max.setAddress(2)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl2.append(auroc)
+    #             myaurocl2.append(myauroc)
+    #
+    #             open_max.setAddress(3)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl3.append(auroc)
+    #             myaurocl3.append(myauroc)
+    #
+    #             open_max.setAddress(4)
+    #             myauroc,auroc = open_max.compute_openmax_main()
+    #             print(auroc)
+    #             aurocl4.append(auroc)
+    #             myaurocl4.append(myauroc)
+    #
+    #         # closedsetlst.append(prec[0])
+    #         #
+    #         # misstakenlst.append(prec[4])
+    #         # opensetLst.append(opensetprec)
+    #     else:
+    #         x=-1
+    #
+    #
+    # print(aurocl)
+    # print("featlayer")
+    # print(aurocl0)
+    # print("L-2")
+    # print(aurocl1)
+    # print("L-3")
+    # print(aurocl2)
+    # print("L-4")
+    # print(aurocl3)
+    # print("L-5")
+    # print(aurocl4)
+    #
+    #
+    # print("my foking mehtod")
+    # print("featlayer")
+    # print(myaurocl0)
+    # print("L-2")
+    # print(myaurocl1)
+    # print("L-3")
+    # print(myaurocl2)
+    # print("L-4")
+    # print(myaurocl3)
+    # print("L-5")
+    # print(myaurocl4)
+    #
+    # # print(closedsetlst)
+    # # print(misstakenlst)
+    # # print(opensetLst)
+    # # plt.plot(aurocl)
+    # # plt.savefig("auroc")
+    # # plt.plot(closedsetlst)
+    # # plt.savefig("closed")
+    # #
+    # # plt.plot(misstakenlst)
+    # # plt.savefig("misstaken")
+    # #
+    # # plt.plot(opensetLst)
+    # # plt.savefig("openset")
+    # # print("train loss " ,trainlst)
+    #
+    # print("test loss ", testlst)
+    #
+    # print("train var ", trainvarlst)
+    #
+    # print("test var ", testvarlst)
